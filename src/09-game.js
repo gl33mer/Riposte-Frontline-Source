@@ -321,7 +321,7 @@ function updateHud(dt) {
   const k = TOUCH.on ? '1' : String(Settings.hudScale || 1);
   if (HUD.k !== k + TOUCH.on) { HUD.k = k + TOUCH.on; hud.style.setProperty('--hud-k', k); HUD.mmFit = true; } // (passer au doigt change aussi la taille de la mini-carte)
   if (mode !== HUD.mode) { updateStreakHud(); if (!e.alive) deathPrompt(); } // glyphes des séries prêtes et de la réapparition : clavier, manette ou doigt
-  if (MATCH.mode === 'survival') { hudText($('scA'), e.kills); hudText($('timer'), fmtTime(SURV.t)); } // la Survie : mes éliminations, et le chrono de la manche (0:00 pendant l'extraction : fmtTime ramène tout à 0)
+  if (MATCH.mode === 'survival') { hudText($('scA'), e.kills); hudText($('timer'), SURV.phase === 'extraction' && SURV.hold > 0 ? String(Math.ceil(SURV.holdMax - SURV.hold)) : fmtTime(SURV.t)); } // la Survie : le chrono de manche ; la tenue du point compte à rebours en gros chiffres (10 à 0), le reste du temps fmtTime ramène tout à 0
   else { hudText($('scA'), MATCH.score[0]); hudText($('scB'), MATCH.score[1]); hudText($('timer'), fmtTime(MATCH.timeLeft)); }
   hudStyle($('barA'), 'transform', `scaleX(${MATCH.score[0] / MATCH.limit})`); hudStyle($('barB'), 'transform', `scaleX(${MATCH.score[1] / MATCH.limit})`);
   // match à mort : le rang trie tous les soldats, quatre fois par seconde suffisent
@@ -528,7 +528,7 @@ function startMatch(opt = {}) {
   // le passage en plein écran (demandé au clic de déploiement) fait refuser une capture demandée pendant la transition : on l'attend
   if (LOCK.fsPending) { const fs = LOCK.fsPending; LOCK.fsPending = null; LOCK.quiet = true; fs.then(() => setTimeout(() => { if (MATCH.state === 'playing') requestLock(); }, 80)); }
   else requestLock();
-  hudText($('scLim'), MATCH.mode === 'survival' ? '' : MATCH.mode === 'dom' ? _t('Premier à {0} points', MATCH.limit) : _t('Premier à {0}', MATCH.limit)); // la Survie : rien à dire (l'élément est masqué, shell.html)
+  hudText($('scLim'), MATCH.mode === 'survival' ? _t('Manche {0} · {1} ennemis', SURV.round, survBotCap(SURV.round)) : MATCH.mode === 'dom' ? _t('Premier à {0} points', MATCH.limit) : _t('Premier à {0}', MATCH.limit)); // la Survie : le bandeau dit la manche en cours et son lot de bots (il reste affiché, shell.html)
   PL.hsKills = 0; arsSessionReset(); acctMatchStart(); // jeton de partie du compte (09j-compte.js)
   skinTrim(); // tenues de défi que personne ne porte : libérées (09u-tenues.js)
   pfrStart(); // enregistreur de performances, avec « Afficher les performances » (09zo-perfs.js)
