@@ -258,6 +258,7 @@ function drawMinimap() {
   g.imageSmoothingEnabled = true;
   g.drawImage(HUD.mmStatic, HUD.mmX0 * scale, HUD.mmZ0 * scale, HUD.mmStatic.width * k, HUD.mmStatic.height * k);
   domMinimap(g, scale, yaw);
+  if (MATCH.mode === 'survival' && SURV.phase === 'extraction') survMinimap(g, scale); // le point d'extraction clignote (09i-modes.js)
   // repère orienté (alliés, adversaires vus par le satellite) ; contour sombre : il se détache d'un bâtiment clair
   const arrow = (o, col) => {
     g.save(); g.translate(o.pos.x * scale, o.pos.z * scale); g.rotate(-o.yaw);
@@ -320,11 +321,16 @@ function updateHud(dt) {
   const k = TOUCH.on ? '1' : String(Settings.hudScale || 1);
   if (HUD.k !== k + TOUCH.on) { HUD.k = k + TOUCH.on; hud.style.setProperty('--hud-k', k); HUD.mmFit = true; } // (passer au doigt change aussi la taille de la mini-carte)
   if (mode !== HUD.mode) { updateStreakHud(); if (!e.alive) deathPrompt(); } // glyphes des séries prêtes et de la réapparition : clavier, manette ou doigt
-  if (MATCH.mode === 'survival') { hudText($('scA'), e.kills); hudText($('timer'), fmtTime(-MATCH.timeLeft)); } // la Survie : mes éliminations, et le temps survécu (timeLeft négatif ; fmtTime ramène tout le reste à 0)
+  if (MATCH.mode === 'survival') { hudText($('scA'), e.kills); hudText($('timer'), fmtTime(SURV.t)); } // la Survie : mes éliminations, et le chrono de la manche (0:00 pendant l'extraction : fmtTime ramène tout à 0)
   else { hudText($('scA'), MATCH.score[0]); hudText($('scB'), MATCH.score[1]); hudText($('timer'), fmtTime(MATCH.timeLeft)); }
   hudStyle($('barA'), 'transform', `scaleX(${MATCH.score[0] / MATCH.limit})`); hudStyle($('barB'), 'transform', `scaleX(${MATCH.score[1] / MATCH.limit})`);
   // match à mort : le rang trie tous les soldats, quatre fois par seconde suffisent
   if (MATCH.mode === 'ffa' && (HUD.rkT -= dt) <= 0) { HUD.rkT = 0.25; hudText($('scLim'), `${_t('Premier à {0} · vous êtes {1}', MATCH.limit, ordinal(ffaRank()))}`); }
+  // la Survie : la barre de tenue du point d'extraction (celle de la capture de domination, en jaune)
+  const sbar = $('domCap'), scls = MATCH.mode === 'survival' && SURV.phase === 'extraction' && PL.ent.alive
+    && Math.abs(PL.ent.pos.y - SURV.y) <= 2.2 && hyp(PL.ent.pos.x - SURV.x, PL.ent.pos.z - SURV.z) <= SURV.rad ? 'show hot' : '';
+  if (sbar.className !== scls) sbar.className = scls;
+  if (scls) { hudText($('domCapT'), _t('Extraction en cours')); hudStyle($('domCapF'), 'transform', `scaleX(${(SURV.hold / SURV.holdMax).toFixed(3)})`); }
   domHud(dt); ringHud(e);
   const kn = PL.knifeOut; // couteau en main : son nom à la place de l'arme, ni chargeur ni réserve (la place des chiffres reste, rien ne bouge en bas à droite)
   const ammo = `${kn ? 'k' : w.mag + '|' + w.reserve + '|' + d.name}|${PL.nades}${PL.nadeType}|${mode}`;

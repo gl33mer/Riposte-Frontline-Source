@@ -573,7 +573,10 @@ Score à atteindre ⇒ Score to reach
 Restez dans la zone d'un point pour le capturer. Chaque point tenu rapporte un point toutes les 4 secondes. ⇒ Stay inside a point's zone to capture it. Each point held scores one point every 4 seconds.
 Survie ⇒ Survival
 Survie : vous seul contre tous ⇒ Survival: you against everyone
-Vous seul contre 11 bots ⇒ You alone against 11 bots
+Vous seul contre des bots de plus en plus nombreux ⇒ You alone against a growing number of bots
+Extraction ouverte ⇒ Extraction open
+Extraction en cours ⇒ Extracting
+Manche {0} ⇒ Round {0}
 Vous seul contre tous. Le chrono compte votre survie et les bots réapparaissent sans fin. Tenez le plus longtemps possible. ⇒ You against everyone. The clock counts your survival and bots respawn endlessly. Last as long as you can.
 Rival ⇒ Rival
 Vos apparitions retrouvent votre base ⇒ Your spawns return to your base

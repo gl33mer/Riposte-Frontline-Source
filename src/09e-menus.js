@@ -486,8 +486,8 @@ function lobbyMe(tags) {
 function soloStage() {
   const ffa = Settings.mode === 'ffa', MD = MODES[Settings.mode] || MODES.tdm;
   const me = lobbyMe([]), bot = (n, i) => ({ k: 'player', key: 'b' + i, label: n, bot: true }); // (leur niveau est dans le résumé des paramètres)
-  if (Settings.mode === 'survival') { // vous seul, et les onze bots en face (modeRoster les met tous chez Bravo)
-    return { head: `<b>${esc(_t('Joueurs'))}</b><span>${esc(MD.teams)}</span>`, cols: [{ cls: 'enemy', head: esc(_t('Vous contre tous')), rows: [me, ...[...BOT_NAMES[0], ...BOT_NAMES[1]].map(bot)] }] };
+  if (Settings.mode === 'survival') { // vous seul, et les bots de la première manche en face (les suivants se rappellent à chaque passage, modeRoster)
+    return { head: `<b>${esc(_t('Joueurs'))}</b><span>${esc(MD.teams)}</span>`, cols: [{ cls: 'enemy', head: esc(_t('Vous contre tous')), rows: [me, ...[...BOT_NAMES[0], ...BOT_NAMES[1]].slice(0, survBotCap(1)).map(bot)] }] };
   }
   if (ffa) {
     const all = [...BOT_NAMES[0], ...BOT_NAMES[1]], idx = all.map((n, i) => i), cut = all.length - FFA_BOTS;

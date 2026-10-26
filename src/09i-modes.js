@@ -6,8 +6,9 @@
      ffa  match à mort : chacun pour soi, les 12 soldats s'affrontent, premier à N éliminations ;
      dom  domination : trois points à tenir (A côté d'Alpha, B au centre, C côté Bravo), chaque point tenu rapporte
           un point de score toutes les DOM.tick secondes, premier camp à N points ;
-     survival  survie (solo) : vous seul, les onze bots tous chez Bravo ; le chrono compte la survie, la mort du
-          joueur seule termine la partie (pas de limite, pas de séries, les bots réapparaissent sans fin).
+     survival  survie (solo) : vous seul, des bots rappelés manche après manche (quatre, puis un de plus à chaque
+          passage) ; le chrono de manche ouvre l'extraction, dix secondes tenues au point font passer à la carte
+          suivante (éliminations et temps conservés), la mort seule termine la partie.
    MATCH.mode vaut 'tdm' tant qu'aucun mode n'est choisi. Les règles d'alliance passent par
    allied(a, b) : en match à mort, personne n'est l'allié de personne, quelle que soit l'équipe d'origine du soldat (qui
    ne sert plus qu'à la tenue et à la base de départ).
@@ -23,7 +24,7 @@ const MODES = {
   dom: { name: _t('Domination'), btn: _t('Domination'), sub: _t('Domination, trois points à tenir'), teams: _t('6 contre 6, trois points à tenir'), lim: _t('Score à atteindre'), unit: 'points',
     limits: [100, 150, 200, 250], key: 'limitDom', respawn: 4, botRespawn: 4.5, prot: 2,
     hint: _t('Restez dans la zone d\u0027un point pour le capturer. Chaque point tenu rapporte un point toutes les 4 secondes.') },
-  survival: { name: _t('Survie'), btn: _t('Survie'), sub: _t('Survie : vous seul contre tous'), teams: _t('Vous seul contre 11 bots'),
+  survival: { name: _t('Survie'), btn: _t('Survie'), sub: _t('Survie : vous seul contre tous'), teams: _t('Vous seul contre des bots de plus en plus nombreux'),
     lim: _t('Sans limite'), unit: _t('éliminations'), limits: null, key: null, respawn: Infinity, botRespawn: 5.5, prot: 2,
     hint: _t('Vous seul contre tous. Le chrono compte votre survie et les bots réapparaissent sans fin. Tenez le plus longtemps possible.') },
 };
@@ -42,6 +43,7 @@ function modeStart(mode) {
   SPAWN_LOG.length = 0; DEATH_LOG.length = 0; SPAWN_TRAP.length = 0; OPEN.on = true; // départ : chacun sa place (spawnOpening), jusqu'au « En avant ! »
   for (const e of entities) { e.protT = 0; e.lastDeath = null; e.caps = 0; }
   squadReset();
+  if (MATCH.mode === 'survival') survStart(); // avant modeRoster : la manche compte les bots rappelés (survBotCap)
   modeRoster();
   domClear();
   if (MATCH.mode === 'dom') domInit();
@@ -56,20 +58,22 @@ function modeStart(mode) {
 }
 /* Soldats en jeu et tenue de chacun. Match à mort : 7 bots seulement, tous vus en ennemis (tenue sombre, bandes rouges : skinRel),
    pour qu'aucun ne ressemble à un allié. Autres modes : tous en jeu, alliés en clair, ennemis en sombre (06ga-tenues.js).
-   Survie : les onze bots en jeu, tous chez Bravo (le joueur reste seul chez Alpha), tous vus en ennemis. */
+   Survie : survBotCap(SURV.round) bots en jeu (quatre à la manche 1, un de plus à chaque manche), les autres en attente (off),
+   tous chez Bravo, tous vus en ennemis. */
 function modeRoster() {
   const ffa = MATCH.mode === 'ffa', bots = entities.filter((e) => !e.isPlayer), cut = MATCH.online ? 0 : bots.length - FFA_BOTS; // en ligne, l'hôte active les bots (netRebalanceBots)
-  const surv = MATCH.mode === 'survival';
+  const surv = MATCH.mode === 'survival', cap = surv ? survBotCap(SURV.round) : 0; // la Survie : survBotCap(SURV.round) bots en jeu, les autres attendent leur manche (off)
   // on retire des bots répartis sur les deux camps d'origine (un sur trois, puis les derniers)
   const off = new Set(ffa && cut > 0 ? bots.filter((e, i) => i % 3 === 1).concat(bots.slice().reverse()).filter((e, i, a) => a.indexOf(e) === i).slice(0, cut) : []);
-  for (const e of bots) {
-    e.off = off.has(e);
+  for (let i = 0; i < bots.length; i++) {
+    const e = bots[i];
+    e.off = surv ? i >= cap : off.has(e); // la Survie rappelle les bots dans l'ordre : quatre, puis un de plus à chaque manche
     e.team = surv ? 1 : e.team0; // la Survie met tous les bots chez Bravo ; sinon, l'équipe d'origine se reconstitue à chaque partie (team0, 07-bots.js)
     if (e.off) { e.alive = false; e.respawnT = Infinity; e.target = null; e.model.rag = null; e.model.root.visible = false; }
     soldierLook(e.model, skinOf(e), skinRel(e));
   }
 }
-function modeEnd() { domClear(); }
+function modeEnd() { domClear(); survClear(); }
 
 /* Mises à jour à chaque image : protection d'apparition, score du match à mort, points de la domination */
 function modeUpdate(dt) {
@@ -79,6 +83,7 @@ function modeUpdate(dt) {
   hudStyle($('prot'), 'opacity', PL.ent.alive && PL.ent.protT > 0 ? '1' : '0');
   if (MATCH.mode === 'ffa') ffaScore();
   else if (MATCH.mode === 'dom') domUpdate(dt);
+  else if (MATCH.mode === 'survival') survUpdate(dt);
 }
 /* Match à mort : MATCH.score[0] = mes éliminations, MATCH.score[1] = celles du meilleur adversaire */
 function ffaScore() {
@@ -570,4 +575,136 @@ function domLetter(p, c) {
   x.font = '700 15px "Barlow Condensed", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
   x.strokeStyle = 'rgba(0,0,0,0.7)'; x.lineWidth = 3; x.strokeText(p.name, B / 2, B / 2 + 1);
   x.fillStyle = `rgb(${c})`; x.fillText(p.name, B / 2, B / 2 + 1);
+}
+
+/* ==========================================================================
+   SURVIE : LA BOUCLE D'EXTRACTION
+   Le match démarre en « combat » : le chrono de manche (120 s à la première, +30 s à chaque
+   suivante, survStart) s'affiche dans le HUD (updateHud). À zéro, l'extraction s'ouvre
+   (survOpen) : une balise jaune surgit quelque part de la carte, elle clignote sur la
+   mini-carte (survMinimap), et dix secondes tenues sur place (survUpdate, la barre de capture
+   de la domination) font passer à la carte suivante (survExtract) : éliminations et temps
+   conservés, un bot de plus en jeu (survBotCap, modeRoster), la carte suivante vient de la
+   file battue au départ (survNextMap). La mort, elle, termine la partie comme avant.
+   ========================================================================== */
+const SURV = { phase: 'combat', round: 1, t: 120, rad: 5, hold: 0, holdMax: 10, minD: 60, x: 0, z: 0, y: 0, obj: null, tex: null, carry: null, queue: null };
+/* Bots en jeu à la manche r : quatre à la première, un de plus à chaque passage, onze au plus
+   (les onze soldats d'origine : aucune création, la manche ne fait que les rappeler, modeRoster) */
+const survBotCap = (r) => Math.min(11, 3 + r);
+/* Début de partie (modeStart) : manche neuve — la file des cartes se bat, le chrono part de 120 s —
+   ou celle que transporte un passage d'extraction (SURV.carry, posé par survExtract) : les
+   éliminations et le temps repris, la manche suivante, +30 s au chrono (la formule demandée) */
+function survStart() {
+  const c = SURV.carry; SURV.carry = null;
+  SURV.round = c ? c.round : 1;
+  if (c) { PL.ent.kills = c.kills; MATCH.timeLeft = c.timeLeft; } // startMatch vient de les remettre à zéro (09-game.js)
+  else SURV.queue = MAPS.filter((m) => m.ok).map((m) => m.id).sort(() => Math.random() - 0.5); // la file des cartes, battue au départ (même battage que botKs)
+  SURV.phase = 'combat'; SURV.hold = 0; SURV.t = 120 + 30 * (SURV.round - 1);
+  if (c) hudMsg(_t('Manche {0}', SURV.round), 'xp', 2.5);
+}
+/* Chaque image de Survie (modeUpdate) : le chrono de manche, puis la tenue du point d'extraction.
+   On ne compte qu'en jeu ('playing') : derrière le menu de pause la partie continue (pauseGame),
+   mais le chrono de manche, lui, attend */
+function survUpdate(dt) {
+  if (MATCH.state !== 'playing') return;
+  if (SURV.phase === 'combat') {
+    SURV.t -= dt;
+    if (SURV.t <= 0) survOpen();
+    return;
+  }
+  survMarkerTick(dt); // pulsation du balisage
+  const e = PL.ent;
+  const inside = e.alive && Math.abs(e.pos.y - SURV.y) <= 2.2 && hyp(e.pos.x - SURV.x, e.pos.z - SURV.z) <= SURV.rad;
+  SURV.hold = inside ? SURV.hold + dt : 0; // on sort du point : la tenue repart de zéro
+  if (SURV.hold >= SURV.holdMax) survExtract();
+}
+/* Fin du chrono de combat : le point d'extraction s'ouvre à un endroit praticable, tiré au sort
+   (les candidats du chacun pour soi : les deux bases et les points de passage, voir spawnPool), loin du joueur */
+function survOpen() {
+  SURV.phase = 'extraction'; SURV.hold = 0;
+  const e = PL.ent;
+  const pool = SPAWNS[0].concat(SPAWNS[1], spawnField()).filter((p) => hyp(p[0] - e.pos.x, p[1] - e.pos.z) >= SURV.minD);
+  const list = pool.length ? pool : SPAWNS[0].concat(SPAWNS[1], spawnField());
+  const p = list[(Math.random() * list.length) | 0];
+  const id = navNode(p[0], gy0(p[0], p[1]), p[1]); // le sol du point, comme les points de domination (domInit)
+  SURV.x = p[0]; SURV.z = p[1]; SURV.y = id >= 0 ? NAV.ny[id] : gy0(p[0], p[1]);
+  survBuild();
+  hudMsg(_t('Extraction ouverte'), 'xp', 3);
+  sfxAnnounce('cap', 'st_capture'); // l'annonce de prise d'un point existe déjà : elle dit « rendez-vous »
+}
+/* Balise d'extraction : un disque au sol et un voile, en jaune accent, plus haut que ceux de la
+   domination (il se voit de loin) ; textures propres à la Survie (domClear libère les siennes sans condition) */
+function survTextures() {
+  if (SURV.tex) return SURV.tex;
+  const ring = canvasTex(256, (g, S) => {
+    const r = S / 2, gr = g.createRadialGradient(r, r, 0, r, r, r);
+    gr.addColorStop(0, 'rgba(255,255,255,0.04)'); gr.addColorStop(0.7, 'rgba(255,255,255,0.12)'); gr.addColorStop(0.9, 'rgba(255,255,255,0.3)');
+    gr.addColorStop(0.945, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.985, 'rgba(255,255,255,0.3)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  }, false);
+  const veil = canvasTex(64, (g, S) => {
+    const gr = g.createLinearGradient(0, 0, 0, S);
+    gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.55, 'rgba(255,255,255,0.18)'); gr.addColorStop(1, 'rgba(255,255,255,0.7)');
+    g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  }, false);
+  return (SURV.tex = { ring, veil });
+}
+function survBuild() {
+  const T = survTextures(), g = new THREE.Group(); g.position.set(SURV.x, SURV.y, SURV.z);
+  const add = (geo, mat, y, order) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; m.userData.noAO = true; m.renderOrder = order; m.frustumCulled = false; g.add(m); return m; };
+  SURV.ringMat = new THREE.MeshBasicMaterial({ map: T.ring, color: 0xf6c445, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true });
+  SURV.ringMat.polygonOffset = true; SURV.ringMat.polygonOffsetFactor = -2; // comme la domination : le disque ne se bat pas avec le sol (domBuild)
+  SURV.ringMat.opacity = 0.9;
+  const disc = add(new THREE.CircleGeometry(SURV.rad, 64), SURV.ringMat, 0.05, 4); disc.rotation.x = -Math.PI / 2;
+  SURV.veilMat = new THREE.MeshBasicMaterial({ map: T.veil, color: 0xf6c445, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true }); SURV.veilMat.opacity = 0.5;
+  add(new THREE.CylinderGeometry(SURV.rad, SURV.rad, 3, 64, 1, true), SURV.veilMat, 1.5, 5);
+  SURV.obj = g; mapAdd(g); // la carte le possède : mapUnload le libère avec elle (02-map.js)
+}
+/* Pulsation, chaque image, sans allocation (domHud fait de même pour la domination) */
+function survMarkerTick(dt) {
+  const k = 0.65 + 0.35 * Math.sin(MATCH.time * 6);
+  SURV.ringMat.opacity = 0.55 + 0.35 * k; SURV.veilMat.opacity = 0.3 + 0.25 * k;
+}
+/* Point d'extraction sur la mini-carte : un disque jaune qui clignote (2 Hz), et le cercle de sa zone */
+function survMinimap(g, scale) {
+  if (((MATCH.time * 2) | 0) % 2) return; // éteint une image sur deux : le clignotement
+  g.fillStyle = 'rgba(246,196,69,0.95)'; g.strokeStyle = 'rgba(246,196,69,0.55)'; g.lineWidth = 2;
+  g.beginPath(); g.arc(SURV.x * scale, SURV.z * scale, SURV.rad * scale, 0, TAU); g.stroke();
+  g.beginPath(); g.arc(SURV.x * scale, SURV.z * scale, 4.5, 0, TAU); g.fill();
+}
+/* La file des cartes, battue au départ de la partie (survStart) : chaque passage prend la suivante ;
+   vide, elle se rebat. Jamais deux fois la même d'affilée quand c'est évitable (le battage de botKs) */
+function survNextMap() {
+  if (!SURV.queue || !SURV.queue.length) SURV.queue = MAPS.filter((m) => m.ok).map((m) => m.id).sort(() => Math.random() - 0.5);
+  let id = SURV.queue.shift();
+  if (id === MAPL.id && SURV.queue.length) { SURV.queue.push(id); id = SURV.queue.shift(); }
+  return id;
+}
+/* Dix secondes tenues : passage vers la carte suivante. La partie se fige le temps du chargement
+   (frame ne traite aucun état de jeu en 'loading'), l'écran de chargement la couvre (menuLoading,
+   sans l'écran de déploiement : la classe en cours repart telle quelle), et la manche suivante
+   démarre avec les éliminations et le temps du joueur (SURV.carry, relu par survStart) */
+async function survExtract() {
+  if (MATCH.state !== 'playing' || MATCH.fin || MATCH.finalPending || UI.busy) return; // la mort a décidé : pas de passage
+  UI.busy = true; MATCH.state = 'loading'; // fige le jeu pendant le chargement (frame, 09-game.js)
+  survClear();
+  const id = survNextMap();
+  SURV.carry = { round: SURV.round + 1, kills: PL.ent.kills, timeLeft: MATCH.timeLeft };
+  Settings.map = id; saveSettings(); // le menu Solo et « Rejouer » suivent la carte de la manche en cours
+  const F = { online: false, map: id, deploy: () => startMatch() };
+  UI.flow = F; // menuLoading s'y réfère pour la progression et l'annulation
+  let ok = false;
+  try { ok = await menuLoading(F); } catch (e) { ok = false; }
+  if (ok && UI.flow === F) F.deploy(); // startMatch : manche suivante, SURV.carry relu par modeStart puis survStart
+  $('matchload').classList.add('hidden');
+  UI.flow = null; UI.busy = false;
+  if (!ok) toMenu('solo'); // la carte d'avant est déjà libérée : on rend la main aux menus (la manche est perdue)
+}
+/* Fin de partie, retour aux menus, ou passage vers la carte suivante : le balisage disparaît (le schéma de domClear) */
+function survClear() {
+  if (SURV.obj && SURV.obj.parent) SURV.obj.parent.remove(SURV.obj);
+  if (SURV.obj) SURV.obj.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  if (SURV.tex) { SURV.tex.ring.dispose(); SURV.tex.veil.dispose(); }
+  SURV.obj = null; SURV.tex = null; SURV.phase = 'combat'; SURV.hold = 0;
+  const bar = $('domCap'); if (bar && bar.className) bar.className = '';
 }
