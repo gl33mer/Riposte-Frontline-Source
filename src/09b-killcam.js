@@ -208,7 +208,7 @@ function kcAbort() {
 }
 function kcSkip() {
   if (KC.active) { endKillcam(); return; }
-  if (MATCH.state === 'playing' && !PL.ent.alive && PL.deathT > 0.35 && !MATCH.finalPending) { KC.pending = null; respawnPlayer(); }
+  if (MATCH.state === 'playing' && !PL.ent.alive && PL.deathT > 0.35 && !MATCH.finalPending && MATCH.mode !== 'survival') { KC.pending = null; respawnPlayer(); } // la Survie : pas de réapparition sur demande (Sans fin : au prochain passage ; Hardcore : la partie finit)
 }
 
 const _kf = new V3(), _kr = new V3(), _kd = new V3(), _kh = new V3();

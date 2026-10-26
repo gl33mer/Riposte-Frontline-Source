@@ -236,6 +236,7 @@ function showDeathScreen(a, weapon, head) {
 /* Invite de réapparition (Espace, clic, Entrée ; A ou X à la manette ; un toucher) : réécrite si le mode d'entrée change pendant l'attente */
 function deathPrompt() {
   const mode = inputMode(); if (mode === HUD.dMode) return; HUD.dMode = mode;
+  if (MATCH.mode === 'survival' && MATCH.online && !NET.cfg.dm) { hudHtml($('death').querySelector('.skip'), _t('Vous réapparaîtrez à la prochaine extraction')); return; } // la Survie sans fin : on attend le passage, rien sur demande
   hudHtml($('death').querySelector('.skip'), mode === 'touch' ? esc(_t('Touchez : réapparaître tout de suite')) : mode === 'pad' ? _t('{0} Réapparaître tout de suite', actGlyph('confirm'))
     : _t('{0} ou {1} Réapparaître tout de suite', keyGlyph(_t('Espace')), actGlyph('fire')));
 }

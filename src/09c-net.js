@@ -159,6 +159,8 @@ function netNick() {
   return n;
 }
 function netTeamCounts() { const c = [0, 0]; for (const p of NET.players.values()) c[p.t]++; return c; }
+/* Joueurs qu'accepte le salon selon le mode : quatre en Survie (les bots font l'autre camp), huit ailleurs */
+function netMaxPlayers() { return NET.cfg.mode === 'survival' ? 4 : NET_MAX; }
 
 /* ---------- Envois ---------- */
 function netSend(m) { const c = NET.hostConn; if (c && c.open) { try { c.send(m); NET.lastSend = performance.now(); } catch (e) { /* canal en cours de fermeture */ } } }
@@ -197,7 +199,7 @@ function netHost(o) {
 function netHostUp(id) {
   if (NET.joined) return;
   NET.me = id; NET.joined = true;
-  NET.players.set(id, { id, n: NET.nick, lv: playerLevel(), t: NET.srv ? Math.max(0, srvTeam()) : 0, conn: null, ig: false, seen: performance.now(), ld: 0 });
+  NET.players.set(id, { id, n: NET.nick, lv: playerLevel(), t: NET.cfg.mode === 'survival' ? 0 : NET.srv ? Math.max(0, srvTeam()) : 0, conn: null, ig: false, seen: performance.now(), ld: 0 }); // la Survie : un seul camp de joueurs (Alpha)
   if (NET.srv) srvRoomUp(); // la partie d'un salon public : le serveur l'annonce aux autres, elle se lance quand ils sont là (srvHostTick)
   else netStatus(NET.tx.p2p === 'ok' || netViaServer() ? _t('Salon ouvert : envoyez le lien à vos amis, puis lancez la partie.') : _t('Salon ouvert par le relais. Envoyez le lien à vos amis, puis lancez la partie.'));
   netLobbyChanged();
@@ -433,7 +435,7 @@ function netHello() { return SRV.list ? _t('Rejoignez une partie publique, ou cr
 function netPubUrl() { const u = netrUrl(); return u && netViaServer() ? u.replace(/^ws/, 'http') + '/salons' : ''; }
 function netPubSync() {
   if (NET.role !== 'host' || !NET.relay) return;
-  NET.relay.pub(NET.cfg.pub ? { n: NET.nick, m: NET.cfg.map, o: NET.cfg.mode, j: NET.players.size, x: NET_MAX, p: NET.phase, v: NET_PROTO } : null);
+  NET.relay.pub(NET.cfg.pub ? { n: NET.nick, m: NET.cfg.map, o: NET.cfg.mode, j: NET.players.size, x: netMaxPlayers(), p: NET.phase, v: NET_PROTO } : null);
 }
 async function netPubFetch() {
   const u = netPubUrl(); if (!u) return [];
@@ -496,9 +498,9 @@ function netHostMsg(c, m) {
     const prev = k ? [...NET.players.values()].find((p) => p.k === k && p.conn && p.conn !== c) : null;
     if (prev) netHostForget(prev);
     if (k && NET.banned.has(k)) { try { c.send({ t: 'deny', why: 'kick' }); } catch (e) { /* ignoré */ } setTimeout(() => c.close(), 800); return; } // exclu par l'hôte
-    if (NET.players.size >= NET_MAX) { try { c.send({ t: 'deny', why: 'full' }); } catch (e) { /* ignoré */ } setTimeout(() => c.close(), 800); return; }
+    if (NET.players.size >= netMaxPlayers()) { try { c.send({ t: 'deny', why: 'full' }); } catch (e) { /* ignoré */ } setTimeout(() => c.close(), 800); return; } // la Survie en prend quatre (netMaxPlayers)
     const cnt = netTeamCounts(), want = NET.srv && (m.tm === 0 || m.tm === 1) && (m.mig || (SRV.st && SRV.st.ps)) ? m.tm : -1; // l'équipe choisie dans un salon créé, ou celle de la partie reprise
-    pl = { id, k, n: netClean(m.n), lv: clamp(m.lv | 0, 0, 100), t: prev ? prev.t : want >= 0 ? want : cnt[1] < cnt[0] ? 1 : 0, conn: c, ig: !!m.mig && NET.on, seen: now, r: !!c.relay, ld: m.mig ? 100 : 0 }; // mig : déjà dans la partie que je viens de reprendre
+    pl = { id, k, n: netClean(m.n), lv: clamp(m.lv | 0, 0, 100), t: prev ? prev.t : NET.cfg.mode === 'survival' ? 0 : want >= 0 ? want : cnt[1] < cnt[0] ? 1 : 0, conn: c, ig: !!m.mig && NET.on, seen: now, r: !!c.relay, ld: m.mig ? 100 : 0 }; // mig : déjà dans la partie que je viens de reprendre ; Survie : tous chez Alpha
     NET.players.set(id, pl);
     netStatus(prev ? `${_t('{0} a changé de connexion{1}.', pl.n, pl.r ? ' ' + _t('(relais)') : '')}` : `${_t('{0} a rejoint le salon.', pl.n)}`);
     netLobbyChanged();
@@ -515,7 +517,7 @@ function netHostMsg(c, m) {
     case 'nick': pl.n = netClean(m.n); netLobbyChanged(); break;
     case 'lv': pl.lv = clamp(m.lv | 0, 0, 100); netLobbyChanged(); break; // niveau monté depuis l'arrivée (netLevelSync)
     case 'chat': chatHostRelay(id, m.x); break;
-    case 'team': if (!pl.ig) { pl.t = 1 - pl.t; netLobbyChanged(); } break;
+    case 'team': if (!pl.ig && NET.cfg.mode !== 'survival') { pl.t = 1 - pl.t; netLobbyChanged(); } break; // la Survie : un seul camp, le changement ne fait rien
     case 'join': // arrivée en cours de partie (ou pendant le chargement : on ne l'attend pas)
       if (NET.phase !== 'lobby' && !pl.ig) {
         pl.ig = true; pl.late = NET.phase === 'loading'; netLobbyChanged();
@@ -646,9 +648,9 @@ function netRebalanceBots() {
   if (NET.role !== 'host' || !NET.on) return;
   const hum = [0, 0];
   for (const pl of NET.players.values()) if (pl.ig) hum[pl.t]++;
-  const ffa = NET.cfg.mode === 'ffa'; // chacun pour soi : un seul groupe, complété jusqu'à NET_MAX joueurs
+  const ffa = NET.cfg.mode === 'ffa', surv = NET.cfg.mode === 'survival'; // chacun pour soi : un seul groupe, complété jusqu'à NET_MAX joueurs ; Survie : les joueurs chez Alpha, les bots rappelés chez Bravo au fil des manches (survBotCap)
   for (const t of ffa ? [-1] : [0, 1]) {
-    const want = !NET.cfg.bots ? 0 : ffa ? Math.max(0, NET_MAX - hum[0] - hum[1]) : Math.max(0, NET_TEAM - hum[t]);
+    const want = surv ? (t === 1 ? survBotCap(SURV.round) : 0) : !NET.cfg.bots ? 0 : ffa ? Math.max(0, NET_MAX - hum[0] - hum[1]) : Math.max(0, NET_TEAM - hum[t]);
     const pool = entities.filter((e) => !e.isPlayer && !e.isRemote && (ffa || e.team === t));
     let active = pool.filter((b) => b.netBot);
     while (active.length > want) { const b = active.find((x) => !x.alive) || active[active.length - 1]; netBotOff(b); active = active.filter((x) => x !== b); }
@@ -771,24 +773,27 @@ function netClientMsg(m) {
       for (const it of m.l) if (Array.isArray(it) && typeof it[0] === 'string') netApply(it[0], it[1]);
       if (typeof m.tl === 'number' && isFinite(m.tl)) { MATCH.timeLeft = m.tl; cdNetIn(m.cd); } // (tl : l'envoi de l'hôte lui-même, pas un état relayé)
       if (m.dm && MATCH.mode === 'dom') domNetApply(m.dm);
+      if (m.sv && MATCH.mode === 'survival') survNetApply(m.sv); // la Survie : l'état tenu par l'hôte (09i-modes.js)
       break;
     case 'gone': if (typeof m.id === 'string') netRemoveById(m.id); break;
     case 'away': if (typeof m.id === 'string') netRemoteAway(m.id); break;
+    case 'smap': survNetMap(m); break; // la Survie : passage vers la carte suivante, ordonné par l'hôte (09i-modes.js)
     case 'end':
       if (NET.on && (MATCH.state === 'playing' || MATCH.state === 'paused')) matchFinish();
       else if (UI.flow && UI.flow.online && !NET.on) { NET.phase = 'lobby'; uiOpen('multi', ['main']); netStatus(_t('L\u0027hôte a annulé la partie.')); }
       break;
-    case 'deny': netReset(m.why === 'full' ? _t('Ce salon est complet (8 joueurs).') : m.why === 'kick' ? _t('L\u0027hôte vous a exclu du salon.') : _t('Votre version du jeu diffère de celle de l\u0027hôte. Rechargez la page.')); break;
+    case 'deny': netReset(m.why === 'full' ? _t('Ce salon est complet.') : m.why === 'kick' ? _t('L\u0027hôte vous a exclu du salon.') : _t('Votre version du jeu diffère de celle de l\u0027hôte. Rechargez la page.')); break; // complet : la limite dépend du mode (netMaxPlayers), l'invité ne la connaît pas
   }
 }
 function netPhase(ph) { return ph === 'playing' || ph === 'loading' ? ph : 'lobby'; }
 function netCfg(c) {
   c = c || {};
   const map = mapById(c.map).id, mode = MODE_IDS.includes(c.mode) && (c.mode !== 'dom' || MAP_DEFS[map].dom) ? c.mode : 'tdm'; // la domination demande une carte à points
-  const L = MODES[mode].limits, limit = L.includes(+c.limit) ? +c.limit : L[1];
+  const L = MODES[mode].limits, limit = L ? (L.includes(+c.limit) ? +c.limit : L[1]) : 0; // la Survie n'a ni limite (limits null) ni durée : la mort du dernier joueur seul décide
   const time = [5, 10, 15].includes(+c.time) ? +c.time : 10;
   const diff = [0, 1, 2].includes(+c.diff) ? +c.diff : 2;
-  return { bots: +c.bots ? 1 : 0, diff, limit, time, map, mode, pub: +c.pub ? 1 : 0 };
+  const dm = [0, 1].includes(+c.dm) ? +c.dm : 0, xr = [0, 1].includes(+c.xr) ? +c.xr : 0; // Survie : mode de mort (0 sans fin, 1 hardcore) et règle d'extraction (0 un joueur suffit, 1 tous)
+  return { bots: +c.bots ? 1 : 0, diff, limit, time, map, mode, pub: +c.pub ? 1 : 0, dm, xr };
 }
 
 /* ---------- Entrée et sortie de partie ---------- */
@@ -1189,7 +1194,7 @@ function netUpdate(dt) {
     if (NET.role === 'host') {
       const l = [[NET.me, netPresence(PL.ent, now)]];
       for (const b of entities) if (b.netBot) l.push([b.netId, netPresence(b, now)]);
-      netBroadcast({ t: 'ps', l, tl: Math.round(MATCH.timeLeft * 100) / 100, cd: cdNetOut(), dm: MATCH.mode === 'dom' ? domNetState() : undefined }, true); // cd : décompte du départ (09y-decompte.js)
+      netBroadcast({ t: 'ps', l, tl: Math.round(MATCH.timeLeft * 100) / 100, cd: cdNetOut(), dm: MATCH.mode === 'dom' ? domNetState() : undefined, sv: MATCH.mode === 'survival' ? survNetState() : undefined }, true); // cd : décompte du départ (09y-decompte.js) ; sv : l'état de survie (09i-modes.js)
     } else netSend({ t: 'p', p: netPresence(PL.ent, now) });
   }
   const live = MATCH.state === 'playing' || MATCH.state === 'paused';
@@ -1197,6 +1202,7 @@ function netUpdate(dt) {
     if (NET.role === 'host' && live && ffaList().some((e) => e.kills >= MATCH.limit)) matchFinishSoon();
     return;
   }
+  if (MATCH.mode === 'survival') return; // survie : l'état est tenu par l'hôte (survUpdate, survNetApply), qui seul annonce la fin ; ni limite ni score d'équipe
   if (MATCH.mode === 'dom') return; // domination : points tenus par l'hôte (domUpdate, domNetApply), qui annonce la fin
   // score d'équipe : somme des éliminations déclarées par chacun
   const sc = [0, 0];
@@ -1244,19 +1250,20 @@ function netHeartbeat() {
 /* Réglage changé par l'hôte dans le salon : il vaut pour tout le salon, et l'hôte le retrouve en Solo (mémoire commune) */
 function netSetupSet(k, v) {
   if (NET.role !== 'host' || NET.phase !== 'lobby') return;
+  if (k === 'mode' && v === 'survival' && NET.players.size > 4) { netStatus(_t('Trop de joueurs pour la Survie (quatre au plus).')); sfxUi('back'); return; } // la Survie : quatre joueurs au plus, les bots font l'autre camp
   const c = Object.assign({}, NET.cfg);
   if (k === 'bots') { c.bots = v === 'off' ? 0 : 1; if (v !== 'off') c.diff = v; }
-  else if (k === 'mode') { c.mode = v; c.limit = Settings[MODES[v].key]; }
+  else if (k === 'mode') { c.mode = v; c.limit = MODES[v].key ? Settings[MODES[v].key] : 0; if (v === 'survival') for (const pl of NET.players.values()) pl.t = 0; } // la Survie : un seul camp de joueurs, ni limite ni clé de réglage
   else c[k] = v;
   if (k === 'pub') { NETP.vis = v ? 1 : 0; try { localStorage.setItem('cod_salon_pub', String(NETP.vis)); } catch (e) { /* stockage indisponible */ } } // le prochain salon créé le sera de même
   NET.cfg = netCfg(c);
-  Settings.mode = NET.cfg.mode; Settings.minutes = NET.cfg.time; Settings[MODES[NET.cfg.mode].key] = NET.cfg.limit; if (NET.cfg.bots) Settings.difficulty = NET.cfg.diff;
+  Settings.mode = NET.cfg.mode; Settings.minutes = NET.cfg.time; if (MODES[NET.cfg.mode].key) Settings[MODES[NET.cfg.mode].key] = NET.cfg.limit; if (NET.cfg.bots) Settings.difficulty = NET.cfg.diff;
   saveSettings(); sfxUi('click'); netLobbyChanged();
 }
 /* La discussion du salon est-elle ouverte ? (les messages arrivent alors lus) */
 function netChatOpen() { const L = LM.scr.multi, f = L && L.stack[L.stack.length - 1]; return !!f && f.id === 'chat' && UI.screen === 'multi'; }
 /* Les réglages du salon, pour les rangées des paramètres de la partie (matchRows) */
-function netMatchCfg() { return { map: NET.cfg.map, mode: NET.cfg.mode, diff: NET.cfg.diff, bots: NET.cfg.bots, limit: NET.cfg.limit, time: NET.cfg.time, pub: NET.cfg.pub, pubOk: netViaServer() && !SRV.list, online: true, edit: NET.role === 'host' && NET.phase === 'lobby', set: netSetupSet }; }
+function netMatchCfg() { return { map: NET.cfg.map, mode: NET.cfg.mode, diff: NET.cfg.diff, bots: NET.cfg.bots, limit: NET.cfg.limit, time: NET.cfg.time, pub: NET.cfg.pub, dm: NET.cfg.dm, xr: NET.cfg.xr, pubOk: netViaServer() && !SRV.list, online: true, edit: NET.role === 'host' && NET.phase === 'lobby', set: netSetupSet }; }
 /* Les joueurs d'une équipe (ou tous, chacun pour soi) : niveau, nom, étiquettes ; un joueur sur lequel on peut agir ouvre ses actions.
    Puis les places libres que les bots prendront (6 par équipe, 8 en tout chacun pour soi). */
 function netPlayerRows(t, ffa) {
@@ -1271,15 +1278,15 @@ function netPlayerRows(t, ffa) {
     const acts = other || (!ffa && lobby); // masquer, exclure ; soi-même : changer d'équipe
     rows.push({ k: 'player', key: p.id, label: p.n, lv: p.lv | 0, tags, me: !other, page: acts ? 'player' : null, params: p.id });
   }
-  const free = (ffa ? NET_MAX : NET_TEAM) - rows.length, diff = (DIFF[NET.cfg.diff] || DIFF[1]).name;
-  if (NET.cfg.bots) for (let i = 0; i < free; i++) rows.push({ k: 'player', key: 'bot' + t + '-' + i, label: diff, bot: true });
+  const surv = NET.cfg.mode === 'survival', free = surv ? (t === 1 ? survBotCap(1) : 0) : (ffa ? NET_MAX : NET_TEAM) - rows.length, diff = surv ? DIFF_SURV.name : (DIFF[NET.cfg.diff] || DIFF[1]).name; // la Survie : les bots font le camp Bravo, quatre à l'ouverture (le réglage de bots ne s'y applique pas)
+  if (surv || NET.cfg.bots) for (let i = 0; i < free; i++) rows.push({ k: 'player', key: 'bot' + t + '-' + i, label: diff, bot: true });
   if (!rows.length) rows.push({ k: 'note', text: _t('Personne') });
   return rows;
 }
 /* Scène du salon : les joueurs par équipe, la sienne d'abord */
 function netStage() {
   const ffa = NET.cfg.mode === 'ffa', me = NET.players.get(NET.me), mine = me ? me.t : 0;
-  const head = `<b>${esc(_t('Joueurs'))}</b><span>${NET.players.size}/${NET_MAX}</span>`;
+  const head = `<b>${esc(_t('Joueurs'))}</b><span>${NET.players.size}/${netMaxPlayers()}</span>`;
   const foot = $('netDiagBtn'), note = NET.status && NET.status !== netHello() ? $('netStatus') : null; // l'état du salon (lien copié, connexion...) au-dessus des joueurs ; le rapport de connexion dessous
   if (ffa) return { head, note, foot, cols: [{ head: esc(_t('Chacun pour soi')), rows: netPlayerRows(0, true) }] };
   return { head, note, foot, cols: [mine, 1 - mine].map((t) => ({ cls: t === mine ? 'ally' : 'enemy', head: esc(TEAM_NAMES[t]), rows: netPlayerRows(t, false) })) };
@@ -1297,6 +1304,7 @@ function netPubStage() {
   return { head: `<b>${esc(_t('Parties publiques'))}</b>${online}`, cols: [{ rows }] };
 }
 function netTeamSwap(id) {
+  if (NET.cfg.mode === 'survival') return; // la Survie : un seul camp de joueurs, pas d'échange
   if (id === NET.me) {
     if (NET.role === 'client') netSend({ t: 'team' });
     else if (NET.role === 'host') { const me = NET.players.get(NET.me); if (me && !me.ig) { me.t = 1 - me.t; netLobbyChanged(); } }
@@ -1354,7 +1362,7 @@ const NET_PAGES = {
     const p = NET.players.get(id), host = NET.role === 'host', ffa = NET.cfg.mode === 'ffa', rows = [];
     if (!p) return { head: '', rows };
     const other = id !== NET.me, lobbyOk = NET.phase === 'lobby';
-    if (!ffa && lobbyOk && (!other || host)) rows.push({ k: 'btn', key: 'swap', label: _t('Changer d\u0027équipe'), sub: _t('Déplacer ce joueur dans l\u0027autre équipe'), run: () => { netTeamSwap(id); lmPop(LM.scr.multi); }, disabled: !NET.joined || !!p.ig || NET.on });
+    if (!ffa && NET.cfg.mode !== 'survival' && lobbyOk && (!other || host)) rows.push({ k: 'btn', key: 'swap', label: _t('Changer d\u0027équipe'), sub: _t('Déplacer ce joueur dans l\u0027autre équipe'), run: () => { netTeamSwap(id); lmPop(LM.scr.multi); }, disabled: !NET.joined || !!p.ig || NET.on });
     if (other) { // masquer ses messages (chez soi seulement) ; l'hôte peut l'exclure, en deux temps
       const muted = NET.muted.has(id);
       rows.push({ k: 'btn', key: 'mute', label: muted ? _t('Afficher') : _t('Masquer'), sub: muted ? _t('Afficher de nouveau les messages de ce joueur') : _t('Ne plus voir les messages de ce joueur'), run: () => { if (muted) NET.muted.delete(id); else NET.muted.add(id); sfxUi('click'); chatRender(); netRender(); } });

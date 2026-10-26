@@ -382,7 +382,6 @@ Chargement en cours : {0} ⇒ Loading: {0}
 Partie annulée : la carte n'a pas pu être chargée. ⇒ Match canceled: the map could not be loaded.
 Vous êtes dans le salon. En attente du lancement par l'hôte. ⇒ You are in the lobby. Waiting for the host to start.
 L'hôte a annulé la partie. ⇒ The host canceled the match.
-Ce salon est complet (8 joueurs). ⇒ This lobby is full (8 players).
 Votre version du jeu diffère de celle de l'hôte. Rechargez la page. ⇒ Your game version differs from the host's. Reload the page.
 {0} a rejoint la partie ⇒ {0} joined the match
 {0} a quitté la partie ⇒ {0} left the match
@@ -572,13 +571,22 @@ Domination, trois points à tenir ⇒ Domination, hold three points
 Score à atteindre ⇒ Score to reach
 Restez dans la zone d'un point pour le capturer. Chaque point tenu rapporte un point toutes les 4 secondes. ⇒ Stay inside a point's zone to capture it. Each point held scores one point every 4 seconds.
 Survie ⇒ Survival
-Survie : vous seul contre tous ⇒ Survival: you against everyone
-Vous seul contre des bots de plus en plus nombreux ⇒ You alone against a growing number of bots
+Seul ou à plusieurs, contre des bots de plus en plus nombreux ⇒ Alone or with friends, against a growing number of bots
+Survie : tenez le plus longtemps possible ⇒ Survival: last as long as you can
 Extraction ouverte ⇒ Extraction open
 Extraction en cours ⇒ Extracting
 Extraction dans ⇒ Extraction in
 Manche {0} ⇒ Round {0}
 Manche {0} · {1} ennemis ⇒ Round {0} · {1} enemies
+Mode de mort ⇒ Death mode
+Sans fin ⇒ Endless
+Hardcore ⇒ Hardcore
+Règle d'extraction ⇒ Extraction rule
+Un joueur suffit ⇒ One player is enough
+Sans fin : les morts réapparaissent à la prochaine extraction. Hardcore : la première mort termine la partie. ⇒ Endless: the dead respawn at the next extraction. Hardcore: the first death ends the match.
+Jusqu'à 4 joueurs contre les bots ⇒ Up to 4 players against the bots
+Vous réapparaîtrez à la prochaine extraction ⇒ You will respawn at the next extraction
+Trop de joueurs pour la Survie (quatre au plus). ⇒ Too many players for Survival (four at most).
 Vous seul contre tous. Le chrono compte votre survie et les bots réapparaissent sans fin. Tenez le plus longtemps possible. ⇒ You against everyone. The clock counts your survival and bots respawn endlessly. Last as long as you can.
 Rival ⇒ Rival
 Vos apparitions retrouvent votre base ⇒ Your spawns return to your base
@@ -1448,7 +1456,6 @@ Jouez tout de suite, rejoignez une partie publique, ou créez un salon pour vos 
 Si vous ouvrez un salon public (ou lancez "Jouer maintenant"), votre nom d'affichage, la carte, le mode et le nombre de joueurs figurent dans la liste des parties publiques, visible de tous, tant que le salon est ouvert. ⇒ If you open a public lobby (or use "Play now"), your display name, the map, the mode and the number of players appear in the public match list, visible to everyone, while the lobby is open.
 La partie commence dans ⇒ Match begins in
 En avant ! ⇒ Move out!
-Survie : tenez le plus longtemps possible ⇒ Survival: last as long as you can
 Entre amis ⇒ With friends
 Rejoindre ou lancer une partie publique ⇒ Join or start a public match
 Vous réglez la partie et invitez vos amis ⇒ You set up the match and invite your friends

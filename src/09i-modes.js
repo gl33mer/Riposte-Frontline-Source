@@ -6,9 +6,10 @@
      ffa  match à mort : chacun pour soi, les 12 soldats s'affrontent, premier à N éliminations ;
      dom  domination : trois points à tenir (A côté d'Alpha, B au centre, C côté Bravo), chaque point tenu rapporte
           un point de score toutes les DOM.tick secondes, premier camp à N points ;
-     survival  survie (solo) : vous seul, des bots rappelés manche après manche (quatre, puis un de plus à chaque
-          passage) ; le chrono de manche ouvre l'extraction, dix secondes tenues au point font passer à la carte
-          suivante (éliminations et temps conservés), la mort seule termine la partie.
+     survival  survie (solo, ou en ligne à quatre : l'état tenu par l'hôte, survNetState) : des bots rappelés manche
+          après manche (quatre, puis un de plus à chaque passage) ; le chrono de manche ouvre l'extraction, dix
+          secondes tenues au point font passer à la carte suivante (éliminations et temps conservés), la mort seule
+          termine la partie (Hardcore : la première, Sans fin : la dernière, les morts reviennent au passage).
    MATCH.mode vaut 'tdm' tant qu'aucun mode n'est choisi. Les règles d'alliance passent par
    allied(a, b) : en match à mort, personne n'est l'allié de personne, quelle que soit l'équipe d'origine du soldat (qui
    ne sert plus qu'à la tenue et à la base de départ).
@@ -24,7 +25,7 @@ const MODES = {
   dom: { name: _t('Domination'), btn: _t('Domination'), sub: _t('Domination, trois points à tenir'), teams: _t('6 contre 6, trois points à tenir'), lim: _t('Score à atteindre'), unit: 'points',
     limits: [100, 150, 200, 250], key: 'limitDom', respawn: 4, botRespawn: 4.5, prot: 2,
     hint: _t('Restez dans la zone d\u0027un point pour le capturer. Chaque point tenu rapporte un point toutes les 4 secondes.') },
-  survival: { name: _t('Survie'), btn: _t('Survie'), sub: _t('Survie : vous seul contre tous'), teams: _t('Vous seul contre des bots de plus en plus nombreux'),
+  survival: { name: _t('Survie'), btn: _t('Survie'), sub: _t('Survie : tenez le plus longtemps possible'), teams: _t('Seul ou à plusieurs, contre des bots de plus en plus nombreux'),
     lim: _t('Sans limite'), unit: _t('éliminations'), limits: null, key: null, respawn: Infinity, botRespawn: 5.5, prot: 2,
     hint: _t('Vous seul contre tous. Le chrono compte votre survie et les bots réapparaissent sans fin. Tenez le plus longtemps possible.') },
 };
@@ -587,7 +588,7 @@ function domLetter(p, c) {
    conservés, un bot de plus en jeu (survBotCap, modeRoster), la carte suivante vient de la
    file battue au départ (survNextMap). La mort, elle, termine la partie comme avant.
    ========================================================================== */
-const SURV = { phase: 'combat', round: 1, t: 120, rad: 5, hold: 0, holdMax: 10, minD: 60, x: 0, z: 0, y: 0, obj: null, tex: null, carry: null, queue: null, shown: 0 }; // shown : le dernier chiffre du compte à rebours de tenue affiché (0 : rien à l'écran)
+const SURV = { phase: 'combat', round: 1, t: 120, rad: 5, hold: 0, holdMax: 10, minD: 60, x: 0, z: 0, y: 0, obj: null, tex: null, carry: null, queue: null, shown: 0, stripR: 0 }; // shown : le dernier chiffre du compte à rebours de tenue affiché (0 : rien à l'écran) ; stripR : la dernière manche écrite au bandeau (un invité rejoint en cours de partie)
 /* Bots en jeu à la manche r : quatre à la première, un de plus à chaque passage, onze au plus
    (les onze soldats d'origine : aucune création, la manche ne fait que les rappeler, modeRoster) */
 const survBotCap = (r) => Math.min(11, 3 + r);
@@ -598,33 +599,62 @@ function survStart() {
   const c = SURV.carry; SURV.carry = null;
   SURV.round = c ? c.round : 1;
   if (c) { PL.ent.kills = c.kills; MATCH.timeLeft = c.timeLeft; } // startMatch vient de les remettre à zéro (09-game.js)
-  else SURV.queue = MAPS.filter((m) => m.ok).map((m) => m.id).sort(() => Math.random() - 0.5); // la file des cartes, battue au départ (même battage que botKs)
+  else if (!(MATCH.online && NET.role !== 'host')) SURV.queue = MAPS.filter((m) => m.ok).map((m) => m.id).sort(() => Math.random() - 0.5); // la file des cartes, battue au départ (même battage que botKs) ; en ligne, seul l'hôte la tient (survNextMap, survNetMap)
   SURV.phase = 'combat'; SURV.hold = 0; SURV.t = 120 + 30 * (SURV.round - 1);
   if (c) hudMsg(_t('Manche {0}', SURV.round), 'xp', 2.5);
 }
 /* Chaque image de Survie (modeUpdate) : le chrono de manche, puis la tenue du point d'extraction.
    On ne compte qu'en jeu ('playing') : derrière le menu de pause la partie continue (pauseGame),
-   mais le chrono de manche, lui, attend */
+   mais le chrono de manche, lui, attend. En ligne, seul l'hôte compte (les invités reçoivent l'état,
+   survNetApply) : c'est lui aussi qui décide de la fin — Hardcore à la première mort, Sans fin à la
+   dernière (NET.cfg.dm) — et la tenue suit la règle de l'hôte (NET.cfg.xr) : un joueur suffit, ou tous. */
 function survUpdate(dt) {
   if (MATCH.state !== 'playing') return;
+  if (MATCH.online && NET.role !== 'host') { // invité : rien ne se calcule ici, seul le balisage pulse
+    if (SURV.phase === 'extraction') survMarkerTick(dt);
+    return;
+  }
+  let alive = 1;
+  if (MATCH.online) {
+    alive = PL.ent.alive ? 1 : 0;
+    let total = 1;
+    for (const r of NET.remotes.values()) if (!r.remoteBot) { total++; if (r.alive || r.pred) alive++; } // pred : mort prédite d'un tir de ce poste, pas confirmée — comptée vivante (Hardcore ne finit pas sur une prédiction)
+    if (alive < total && (NET.cfg.dm ? true : alive === 0)) { matchFinishSoon(); return; } // Hardcore : la première mort ; Sans fin : la dernière
+  }
   if (SURV.phase === 'combat') {
     SURV.t -= dt;
     if (SURV.t <= 0) survOpen();
     return;
   }
   survMarkerTick(dt); // pulsation du balisage
-  const e = PL.ent;
-  const inside = e.alive && Math.abs(e.pos.y - SURV.y) <= 2.2 && hyp(e.pos.x - SURV.x, e.pos.z - SURV.z) <= SURV.rad;
+  let inside;
+  if (MATCH.online) {
+    let inZone = PL.ent.alive && Math.abs(PL.ent.pos.y - SURV.y) <= 2.2 && hyp(PL.ent.pos.x - SURV.x, PL.ent.pos.z - SURV.z) <= SURV.rad ? 1 : 0;
+    for (const r of NET.remotes.values()) if (!r.remoteBot && (r.alive || r.pred) && Math.abs(r.pos.y - SURV.y) <= 2.2 && hyp(r.pos.x - SURV.x, r.pos.z - SURV.z) <= SURV.rad) inZone++; // les morts attendent le passage : seuls les vivants comptent
+    inside = NET.cfg.xr ? alive > 0 && inZone >= alive : inZone > 0;
+  } else {
+    const e = PL.ent;
+    inside = e.alive && Math.abs(e.pos.y - SURV.y) <= 2.2 && hyp(e.pos.x - SURV.x, e.pos.z - SURV.z) <= SURV.rad;
+  }
   SURV.hold = inside ? SURV.hold + dt : 0; // on sort du point : la tenue repart de zéro
   if (SURV.hold >= SURV.holdMax) survExtract();
 }
 /* Fin du chrono de combat : le point d'extraction s'ouvre à un endroit praticable, tiré au sort
-   (les candidats du chacun pour soi : les deux bases et les points de passage, voir spawnPool), loin du joueur */
+   (les candidats du chacun pour soi : les deux bases et les points de passage, voir spawnPool), loin
+   des joueurs — en ligne, de chacun des vivants chez l'hôte */
 function survOpen() {
   SURV.phase = 'extraction'; SURV.hold = 0;
-  const e = PL.ent;
-  const pool = SPAWNS[0].concat(SPAWNS[1], spawnField()).filter((p) => hyp(p[0] - e.pos.x, p[1] - e.pos.z) >= SURV.minD);
-  const list = pool.length ? pool : SPAWNS[0].concat(SPAWNS[1], spawnField());
+  const base = SPAWNS[0].concat(SPAWNS[1], spawnField());
+  let pool = base.filter((p) => hyp(p[0] - PL.ent.pos.x, p[1] - PL.ent.pos.z) >= SURV.minD);
+  if (MATCH.online) {
+    const all = base.filter((p) => {
+      if (hyp(p[0] - PL.ent.pos.x, p[1] - PL.ent.pos.z) < SURV.minD) return false;
+      for (const r of NET.remotes.values()) if (!r.remoteBot && r.alive && hyp(p[0] - r.pos.x, p[1] - r.pos.z) < SURV.minD) return false;
+      return true;
+    });
+    if (all.length) pool = all; // loin de tous ; à défaut, loin du seul joueur de ce poste
+  }
+  const list = pool.length ? pool : base; // joueurs partout : n'importe lequel
   const p = list[(Math.random() * list.length) | 0];
   const id = navNode(p[0], gy0(p[0], p[1]), p[1]); // le sol du point, comme les points de domination (domInit)
   SURV.x = p[0]; SURV.z = p[1]; SURV.y = id >= 0 ? NAV.ny[id] : gy0(p[0], p[1]);
@@ -690,25 +720,72 @@ function survNextMap() {
   if (id === MAPL.id && SURV.queue.length) { SURV.queue.push(id); id = SURV.queue.shift(); }
   return id;
 }
+/* État de survie tenu par l'hôte, joint à son envoi de présence (domNetState fait de même pour la domination) */
+function survNetState() {
+  return { ph: SURV.phase === 'extraction' ? 1 : 0, r: SURV.round, t: Math.round(SURV.t * 10) / 10,
+    x: Math.round(SURV.x * 10) / 10, y: Math.round(SURV.y * 10) / 10, z: Math.round(SURV.z * 10) / 10, h: Math.round(SURV.hold * 10) / 10 };
+}
+/* Invité : l'état reçu remplace le sien (jamais calculé ici) ; le balisage suit la phase, le bandeau la manche */
+function survNetApply(m) {
+  if (!m || typeof m !== 'object' || MATCH.mode !== 'survival' || NET.role === 'host') return;
+  const ex = m.ph === 1;
+  SURV.phase = ex ? 'extraction' : 'combat';
+  SURV.round = clamp(numOr(m.r, 1), 1, 99);
+  SURV.t = clamp(numOr(m.t, 0), -3600, 3600);
+  SURV.x = numOr(m.x); SURV.y = numOr(m.y); SURV.z = numOr(m.z);
+  SURV.hold = clamp(numOr(m.h, 0), 0, SURV.holdMax);
+  if (ex && MAPL.root && (!SURV.obj || SURV.obj.position.x !== SURV.x || SURV.obj.position.z !== SURV.z)) survBuild(); // idempotent : reconstruit seulement si le point a bougé (carte en cours de chargement : au prochain envoi)
+  if (!ex && SURV.obj) survClear(); // l'état revient au combat : le balisage disparaît
+  if (SURV.round !== SURV.stripR) { SURV.stripR = SURV.round; hudText($('scLim'), _t('Manche {0} · {1} ennemis', SURV.round, survBotCap(SURV.round))); } // un invité rejoint à la manche 3 voit la bonne manche
+}
 /* Dix secondes tenues : passage vers la carte suivante. La partie se fige le temps du chargement
    (frame ne traite aucun état de jeu en 'loading'), l'écran de chargement la couvre (menuLoading,
    sans l'écran de déploiement : la classe en cours repart telle quelle), et la manche suivante
-   démarre avec les éliminations et le temps du joueur (SURV.carry, relu par survStart) */
+   démarre avec les éliminations et le temps du joueur (SURV.carry, relu par survStart).
+   En ligne, l'hôte seul décide du passage : il l'ordonne aux invités ('smap', survNetMap), et la
+   carte en cours entre dans les réglages du salon (un retardataire charge la bonne, message 'start'). */
 async function survExtract() {
   if (MATCH.state !== 'playing' || MATCH.fin || MATCH.finalPending || UI.busy) return; // la mort a décidé : pas de passage
+  if (MATCH.online && NET.role !== 'host') return; // l'hôte seul tient l'état et le passage
+  const round = SURV.round + 1, kills = PL.ent.kills, tl = MATCH.timeLeft;
+  if (MATCH.online) {
+    NET.cfg = netCfg(Object.assign({}, NET.cfg, { map: survNextMap() }));
+    netBroadcast({ t: 'smap', map: NET.cfg.map, round, tl: Math.round(tl * 100) / 100 }, true);
+    survTransition(NET.cfg.map, { round, kills, timeLeft: tl });
+    return;
+  }
+  survTransition(survNextMap(), { round, kills, timeLeft: tl });
+}
+/* Le passage lui-même, le même chez l'hôte et chez l'invité (survNetMap) : la manche et le temps
+   viennent de l'hôte, les éliminations sont celles du joueur de ce poste. En ligne, startMatch doit
+   rester en ligne (sans 'online', il quitterait le salon) et les distants de la carte d'avant sont
+   retirés, comme au lancement (netStartOnlineNow, 09c-net.js) */
+async function survTransition(mapId, carry) {
   UI.busy = true; MATCH.state = 'loading'; // fige le jeu pendant le chargement (frame, 09-game.js)
+  if ($('pause').classList.contains('show')) $('pause').classList.remove('show'); // un invité en pause passe aussi : l'écran de chargement prend le relais
   survClear();
-  const id = survNextMap();
-  SURV.carry = { round: SURV.round + 1, kills: PL.ent.kills, timeLeft: MATCH.timeLeft };
-  Settings.map = id; saveSettings(); // le menu Solo et « Rejouer » suivent la carte de la manche en cours
-  const F = { online: false, map: id, deploy: () => startMatch() };
+  SURV.carry = carry;
+  Settings.map = mapId; saveSettings(); // le menu Solo et « Rejouer » suivent la carte de la manche en cours
+  const F = { online: false, map: mapId, deploy: () => {
+    if (MATCH.online) {
+      for (const e of NET.remotes.values()) netRemoveRemote(e);
+      NET.remotes.clear(); NET.seen.clear(); NET.seenT.clear(); NET.ak.clear(); NET.sent.length = 0; NET.held.length = 0;
+      NET.shots = 0; NET.lastPub = 0; PL.ent.netQ = { seq: 0, list: [] }; NET.goneK = [0, 0];
+    }
+    startMatch(MATCH.online ? { online: true } : undefined);
+  } };
   UI.flow = F; // menuLoading s'y réfère pour la progression et l'annulation
   let ok = false;
   try { ok = await menuLoading(F); } catch (e) { ok = false; }
   if (ok && UI.flow === F) F.deploy(); // startMatch : manche suivante, SURV.carry relu par modeStart puis survStart
   $('matchload').classList.add('hidden');
   UI.flow = null; UI.busy = false;
-  if (!ok) toMenu('solo'); // la carte d'avant est déjà libérée : on rend la main aux menus (la manche est perdue)
+  if (!ok) toMenu(MATCH.online ? undefined : 'solo'); // la carte d'avant est déjà libérée : on rend la main aux menus (la manche est perdue)
+}
+/* Invité : l'hôte a ordonné le passage (l'état suit chaque envoi de présence, l'ordre part maintenant) */
+function survNetMap(m) {
+  if (MATCH.mode !== 'survival' || NET.role === 'host' || UI.busy || !NET.on || (MATCH.state !== 'playing' && MATCH.state !== 'paused')) return;
+  survTransition(mapById(m.map).id, { round: clamp(numOr(m.round, 2), 2, 99), kills: PL.ent.kills, timeLeft: numOr(m.tl, MATCH.timeLeft) });
 }
 /* Fin de partie, retour aux menus, ou passage vers la carte suivante : le balisage disparaît (le schéma de domClear) */
 function survClear() {

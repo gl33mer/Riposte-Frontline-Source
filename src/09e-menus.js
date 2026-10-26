@@ -442,15 +442,19 @@ function syncSettings() { syncOptions(); }
    niveau, limite, durée, et en ligne la visibilité du salon. Tous les choix sont visibles ; gauche et droite passent au voisin, un clic choisit.
    o = { map, mode, diff, bots (en ligne : 0 ou 1), limit, time, online, edit, pubOk, pub, set(clé, valeur) } ; edit faux : lecture seule (invité d'un salon). */
 function matchRows(o) {
-  const MD = MODES[o.mode] || MODES.tdm, ffa = o.mode === 'ffa', diffs = DIFF.map((d, i) => [i, d.name]), set = (k) => (v) => o.set(k, v), dis = !o.edit;
-  const teams = !o.online ? MD.teams : ffa ? (o.bots ? _t('Jusqu\u0027à 8 joueurs, complétés par des bots') : _t('Chacun pour soi, joueurs humains seulement'))
+  const MD = MODES[o.mode] || MODES.tdm, ffa = o.mode === 'ffa', surv = o.mode === 'survival', diffs = DIFF.map((d, i) => [i, d.name]), set = (k) => (v) => o.set(k, v), dis = !o.edit;
+  const teams = !o.online ? MD.teams : surv ? _t('Jusqu\u0027à 4 joueurs contre les bots') : ffa ? (o.bots ? _t('Jusqu\u0027à 8 joueurs, complétés par des bots') : _t('Chacun pour soi, joueurs humains seulement'))
     : o.bots ? _t('6 contre 6, complétés par des bots') : _t('Deux équipes, joueurs humains seulement');
-  const rows = [], surv = o.mode === 'survival'; // la Survie : ni difficulté (une ligne à part, DIFF_SURV), ni limite ni durée (le chrono compte la survie)
+  const rows = []; // la Survie : ni difficulté (une ligne à part, DIFF_SURV), ni limite ni durée (le chrono compte la survie)
   if (dis) rows.push({ k: 'note', text: o.note || _t('Réglés par l\u0027hôte') });
   rows.push(
-    { k: 'seg', full: true, wide: true, key: 'mode', label: _t('Mode'), items: MODE_IDS.filter((id) => (id !== 'dom' || MAP_DEFS[o.map].dom) && (id !== 'survival' || !o.online)).map((id) => [id, MODES[id].btn]), get: () => o.mode, set: set('mode'), disabled: dis }, // la Survie est un mode solo : le salon en ligne ne la propose pas
+    { k: 'seg', full: true, wide: true, key: 'mode', label: _t('Mode'), items: MODE_IDS.filter((id) => id !== 'dom' || MAP_DEFS[o.map].dom).map((id) => [id, MODES[id].btn]), get: () => o.mode, set: set('mode'), disabled: dis },
     { k: 'note', cls: 'hint', text: MD.hint },
     { k: 'info', label: _t('Joueurs'), value: teams });
+  if (surv && o.online) rows.push( // les règles de la Survie en ligne, réglées par l'hôte (mode de mort, règle d'extraction)
+    { k: 'seg', full: true, key: 'dm', label: _t('Mode de mort'), items: [[0, _t('Sans fin')], [1, _t('Hardcore')]], get: () => o.dm, set: set('dm'), disabled: dis },
+    { k: 'seg', full: true, key: 'xr', label: _t('Règle d\u0027extraction'), items: [[0, _t('Un joueur suffit')], [1, _t('Tous les joueurs')]], get: () => o.xr, set: set('xr'), disabled: dis },
+    { k: 'note', cls: 'hint', text: _t('Sans fin : les morts réapparaissent à la prochaine extraction. Hardcore : la première mort termine la partie.') });
   if (!surv) {
     rows.push({ k: 'seg', full: true, wide: o.online, key: 'bots', label: o.online ? _t('Bots') : _t('Difficulté des bots'), items: o.online ? [['off', _t('Aucun')], ...diffs] : diffs, get: () => (o.online && !o.bots ? 'off' : o.diff), set: set('bots'), disabled: dis });
     if (!o.online || o.bots) rows.push({ k: 'note', cls: 'hint', text: DIFF_HINT[o.diff] });
