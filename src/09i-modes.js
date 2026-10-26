@@ -587,7 +587,7 @@ function domLetter(p, c) {
    conservés, un bot de plus en jeu (survBotCap, modeRoster), la carte suivante vient de la
    file battue au départ (survNextMap). La mort, elle, termine la partie comme avant.
    ========================================================================== */
-const SURV = { phase: 'combat', round: 1, t: 120, rad: 5, hold: 0, holdMax: 10, minD: 60, x: 0, z: 0, y: 0, obj: null, tex: null, carry: null, queue: null };
+const SURV = { phase: 'combat', round: 1, t: 120, rad: 5, hold: 0, holdMax: 10, minD: 60, x: 0, z: 0, y: 0, obj: null, tex: null, carry: null, queue: null, shown: 0 }; // shown : le dernier chiffre du compte à rebours de tenue affiché (0 : rien à l'écran)
 /* Bots en jeu à la manche r : quatre à la première, un de plus à chaque passage, onze au plus
    (les onze soldats d'origine : aucune création, la manche ne fait que les rappeler, modeRoster) */
 const survBotCap = (r) => Math.min(11, 3 + r);
@@ -665,6 +665,16 @@ function survMarkerTick(dt) {
   const k = 0.65 + 0.35 * Math.sin(MATCH.time * 6);
   SURV.ringMat.opacity = 0.55 + 0.35 * k; SURV.veilMat.opacity = 0.3 + 0.25 * k;
 }
+/* Tenue du point : le compte à rebours prend l'habillage du départ de partie (« Extraction dans »),
+   le même gros chiffre et les mêmes sons que « La partie commence dans » (cdShow/cdSound, 09y-decompte.js) */
+function survHoldShow(n, first) {
+  const el = $('cd');
+  const num = $('cdNum'); num.textContent = num.dataset.n = String(n);
+  $('cdDial').className = 'cd-dial ' + (n % 2 ? 'a' : 'b');
+  $('cdKick').textContent = _t('Extraction dans');
+  el.className = 'cd show' + (n <= CD_HOT ? ' last' : '') + (first ? ' in' : '');
+  cdSound(n); // un tic par seconde, le bip de liaison sur les trois dernières
+}
 /* Point d'extraction sur la mini-carte : un disque jaune qui clignote (2 Hz), et le cercle de sa zone */
 function survMinimap(g, scale) {
   if (((MATCH.time * 2) | 0) % 2) return; // éteint une image sur deux : le clignotement
@@ -705,6 +715,7 @@ function survClear() {
   if (SURV.obj && SURV.obj.parent) SURV.obj.parent.remove(SURV.obj);
   if (SURV.obj) SURV.obj.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
   if (SURV.tex) { SURV.tex.ring.dispose(); SURV.tex.veil.dispose(); }
-  SURV.obj = null; SURV.tex = null; SURV.phase = 'combat'; SURV.hold = 0;
+  SURV.obj = null; SURV.tex = null; SURV.phase = 'combat'; SURV.hold = 0; SURV.shown = 0;
   const bar = $('domCap'); if (bar && bar.className) bar.className = '';
+  $('cd').className = 'cd'; // le compte à rebours de tenue, s'il était à l'écran
 }

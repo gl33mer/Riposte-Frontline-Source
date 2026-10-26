@@ -321,16 +321,20 @@ function updateHud(dt) {
   const k = TOUCH.on ? '1' : String(Settings.hudScale || 1);
   if (HUD.k !== k + TOUCH.on) { HUD.k = k + TOUCH.on; hud.style.setProperty('--hud-k', k); HUD.mmFit = true; } // (passer au doigt change aussi la taille de la mini-carte)
   if (mode !== HUD.mode) { updateStreakHud(); if (!e.alive) deathPrompt(); } // glyphes des séries prêtes et de la réapparition : clavier, manette ou doigt
-  if (MATCH.mode === 'survival') { hudText($('scA'), e.kills); hudText($('timer'), SURV.phase === 'extraction' && SURV.hold > 0 ? String(Math.ceil(SURV.holdMax - SURV.hold)) : fmtTime(SURV.t)); } // la Survie : le chrono de manche ; la tenue du point compte à rebours en gros chiffres (10 à 0), le reste du temps fmtTime ramène tout à 0
+  if (MATCH.mode === 'survival') { hudText($('scA'), e.kills); hudText($('timer'), fmtTime(SURV.t)); } // la Survie : mes éliminations, et le chrono de la manche (0:00 pendant l'extraction : fmtTime ramène tout à 0)
   else { hudText($('scA'), MATCH.score[0]); hudText($('scB'), MATCH.score[1]); hudText($('timer'), fmtTime(MATCH.timeLeft)); }
   hudStyle($('barA'), 'transform', `scaleX(${MATCH.score[0] / MATCH.limit})`); hudStyle($('barB'), 'transform', `scaleX(${MATCH.score[1] / MATCH.limit})`);
   // match à mort : le rang trie tous les soldats, quatre fois par seconde suffisent
   if (MATCH.mode === 'ffa' && (HUD.rkT -= dt) <= 0) { HUD.rkT = 0.25; hudText($('scLim'), `${_t('Premier à {0} · vous êtes {1}', MATCH.limit, ordinal(ffaRank()))}`); }
-  // la Survie : la barre de tenue du point d'extraction (celle de la capture de domination, en jaune)
+  // la Survie : la tenue du point d'extraction — la barre fine, et le gros compte à rebours du départ de partie (« Extraction dans », survHoldShow)
   const sbar = $('domCap'), scls = MATCH.mode === 'survival' && SURV.phase === 'extraction' && PL.ent.alive
     && Math.abs(PL.ent.pos.y - SURV.y) <= 2.2 && hyp(PL.ent.pos.x - SURV.x, PL.ent.pos.z - SURV.z) <= SURV.rad ? 'show hot' : '';
   if (sbar.className !== scls) sbar.className = scls;
-  if (scls) { hudText($('domCapT'), _t('Extraction en cours')); hudStyle($('domCapF'), 'transform', `scaleX(${(SURV.hold / SURV.holdMax).toFixed(3)})`); }
+  if (scls) {
+    hudText($('domCapT'), _t('Extraction en cours')); hudStyle($('domCapF'), 'transform', `scaleX(${(SURV.hold / SURV.holdMax).toFixed(3)})`);
+    const n = Math.max(1, Math.ceil(SURV.holdMax - SURV.hold)); // le chiffre de tête ne change qu'une fois par seconde
+    if (n !== SURV.shown) { const first = !SURV.shown; SURV.shown = n; survHoldShow(n, first); }
+  } else if (SURV.shown) { SURV.shown = 0; $('cd').className = 'cd'; } // hors du point, ou plus en vie : le compte s'efface
   domHud(dt); ringHud(e);
   const kn = PL.knifeOut; // couteau en main : son nom à la place de l'arme, ni chargeur ni réserve (la place des chiffres reste, rien ne bouge en bas à droite)
   const ammo = `${kn ? 'k' : w.mag + '|' + w.reserve + '|' + d.name}|${PL.nades}${PL.nadeType}|${mode}`;

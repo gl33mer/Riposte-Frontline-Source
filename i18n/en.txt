@@ -576,6 +576,7 @@ Survie : vous seul contre tous ⇒ Survival: you against everyone
 Vous seul contre des bots de plus en plus nombreux ⇒ You alone against a growing number of bots
 Extraction ouverte ⇒ Extraction open
 Extraction en cours ⇒ Extracting
+Extraction dans ⇒ Extraction in
 Manche {0} ⇒ Round {0}
 Manche {0} · {1} ennemis ⇒ Round {0} · {1} enemies
 Vous seul contre tous. Le chrono compte votre survie et les bots réapparaissent sans fin. Tenez le plus longtemps possible. ⇒ You against everyone. The clock counts your survival and bots respawn endlessly. Last as long as you can.
