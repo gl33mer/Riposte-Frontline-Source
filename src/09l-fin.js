@@ -19,6 +19,7 @@ let finTimer = 0;
 /* Résultat du match tel qu'il est à cet instant : result (win, loss ou draw), winner (équipe, -1 sans vainqueur d'équipe), sub (phrase de score) */
 function matchOutcome() {
   const me = PL.ent, [a, b] = MATCH.score;
+  if (MATCH.mode === 'survival') return { result: 'loss', winner: -1, sub: _t('Vous avez survécu {0} · {1} éliminations', fmtTime(-MATCH.timeLeft), me.kills) }; // le compte est celui de l'instant de la mort : figé dans MATCH.fin.out par matchFinish
   if (MATCH.mode === 'ffa') { // le vainqueur est le premier du classement, personne d'autre ne gagne avec lui
     const top = ffaList().sort(ffaCmp)[0], win = top === me;
     return { result: win ? 'win' : 'loss', winner: -1, sub: win ? `${_t('Vous gagnez avec {0} éliminations', me.kills)}` : `${_t('{0} gagne avec {1} éliminations, vous finissez {2}', top.name, top.kills, ordinal(ffaRank()))}` };
@@ -32,6 +33,7 @@ function finByLimit() {
   return ffaDone || (MATCH.mode !== 'ffa' && (MATCH.score[0] >= MATCH.limit || MATCH.score[1] >= MATCH.limit));
 }
 function finKicker() {
+  if (MATCH.mode === 'survival') return _t('Éliminé'); // ce qui a mis fin à la partie : vous
   if (!finByLimit()) return _t('Temps écoulé');
   return MATCH.mode === 'dom' ? _t('Score atteint') : _t('Limite d\u0027éliminations atteinte');
 }

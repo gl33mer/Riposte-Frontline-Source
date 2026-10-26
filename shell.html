@@ -1362,6 +1362,8 @@ body.touch #hud { --hud-top: var(--st); --lane-top: calc(var(--st) + 15 * var(--
 .score .b { color: var(--enemy); } .score .b i { background: var(--enemy); transform-origin: left; }
 #timer { grid-area: t; display: grid; place-items: start center; white-space: nowrap; min-width: calc(78 * var(--hu)); padding: calc(8 * var(--hu)) calc(12 * var(--hu)) 0; font: 700 calc(30 * var(--hu))/1 var(--hud); background: var(--plate); } /* (ligne de base des scores) */
 .score .lim { grid-area: l; justify-self: center; margin-top: calc(4 * var(--hu)); padding: calc(1 * var(--hu)) calc(18 * var(--hu)); font: 600 max(var(--fs-xs), calc(14 * var(--hu)))/1.15 var(--hud); letter-spacing: var(--track); text-transform: uppercase; text-align: center; color: var(--dim); background: linear-gradient(90deg, var(--plate-0), var(--plate-1) 22%, var(--plate-1) 78%, var(--plate-0)); }
+/* Survie : le chrono et les éliminations seulement (modeStart pose .surv) : pas de second camp, ni de barre, ni de limite */
+.score.surv .row.b, .score.surv .lim, .score.surv .row.a .track2 { display: none; }
 /* Domination : pastilles des trois points sous le score, repères à l'écran, barre de capture. Pas seulement la couleur : un point à moi est plein,
    un point adverse cerclé, un point neutre estompé, un point disputé hachuré (jaune) */
 #domRow { grid-area: d; display: flex; justify-content: center; gap: calc(6 * var(--hu)); margin-top: calc(6 * var(--hu)); }

@@ -445,17 +445,19 @@ function matchRows(o) {
   const MD = MODES[o.mode] || MODES.tdm, ffa = o.mode === 'ffa', diffs = DIFF.map((d, i) => [i, d.name]), set = (k) => (v) => o.set(k, v), dis = !o.edit;
   const teams = !o.online ? MD.teams : ffa ? (o.bots ? _t('Jusqu\u0027à 8 joueurs, complétés par des bots') : _t('Chacun pour soi, joueurs humains seulement'))
     : o.bots ? _t('6 contre 6, complétés par des bots') : _t('Deux équipes, joueurs humains seulement');
-  const rows = [];
+  const rows = [], surv = o.mode === 'survival'; // la Survie : ni difficulté (une ligne à part, DIFF_SURV), ni limite ni durée (le chrono compte la survie)
   if (dis) rows.push({ k: 'note', text: o.note || _t('Réglés par l\u0027hôte') });
   rows.push(
-    { k: 'seg', full: true, wide: true, key: 'mode', label: _t('Mode'), items: MODE_IDS.filter((id) => id !== 'dom' || MAP_DEFS[o.map].dom).map((id) => [id, MODES[id].btn]), get: () => o.mode, set: set('mode'), disabled: dis },
+    { k: 'seg', full: true, wide: true, key: 'mode', label: _t('Mode'), items: MODE_IDS.filter((id) => (id !== 'dom' || MAP_DEFS[o.map].dom) && (id !== 'survival' || !o.online)).map((id) => [id, MODES[id].btn]), get: () => o.mode, set: set('mode'), disabled: dis }, // la Survie est un mode solo : le salon en ligne ne la propose pas
     { k: 'note', cls: 'hint', text: MD.hint },
-    { k: 'info', label: _t('Joueurs'), value: teams },
-    { k: 'seg', full: true, wide: o.online, key: 'bots', label: o.online ? _t('Bots') : _t('Difficulté des bots'), items: o.online ? [['off', _t('Aucun')], ...diffs] : diffs, get: () => (o.online && !o.bots ? 'off' : o.diff), set: set('bots'), disabled: dis });
-  if (!o.online || o.bots) rows.push({ k: 'note', cls: 'hint', text: DIFF_HINT[o.diff] });
-  rows.push(
-    { k: 'seg', full: true, key: 'limit', label: MD.lim, items: MD.limits.map((v) => [v, String(v)]), get: () => o.limit, set: set('limit'), disabled: dis },
-    { k: 'seg', full: true, key: 'time', label: _t('Durée maximale'), items: [5, 10, 15].map((v) => [v, v + ' min']), get: () => o.time, set: set('time'), disabled: dis });
+    { k: 'info', label: _t('Joueurs'), value: teams });
+  if (!surv) {
+    rows.push({ k: 'seg', full: true, wide: o.online, key: 'bots', label: o.online ? _t('Bots') : _t('Difficulté des bots'), items: o.online ? [['off', _t('Aucun')], ...diffs] : diffs, get: () => (o.online && !o.bots ? 'off' : o.diff), set: set('bots'), disabled: dis });
+    if (!o.online || o.bots) rows.push({ k: 'note', cls: 'hint', text: DIFF_HINT[o.diff] });
+    rows.push(
+      { k: 'seg', full: true, key: 'limit', label: MD.lim, items: MD.limits.map((v) => [v, String(v)]), get: () => o.limit, set: set('limit'), disabled: dis },
+      { k: 'seg', full: true, key: 'time', label: _t('Durée maximale'), items: [5, 10, 15].map((v) => [v, v + ' min']), get: () => o.time, set: set('time'), disabled: dis });
+  }
   if (o.pubOk) rows.push({ k: 'seg', full: true, key: 'pub', label: _t('Salon'), items: [[0, _t('Privé')], [1, _t('Public')]], get: () => (o.pub ? 1 : 0), set: set('pub'), disabled: dis }); // en ligne, avec le serveur de jeu : privé ou listé
   return rows;
 }
@@ -473,7 +475,7 @@ function mapCards(selId, pick) {
 function mapPreview(m, o) {
   const MD = MODES[o.mode] || MODES.tdm, art = m.ok && MAP_ART[m.id], mode = o.mode === 'ffa' ? MD.btn : MD.name;
   return (art ? `<img class="mapart" alt="" decoding="async" src="${art}">` : '<span class="mapart none"></span>')
-    + `<div class="pv-t"><b>${esc(m.name)}</b><span class="pv-m">${esc(mode)}</span><span class="pv-i">${esc(o.limit + ' ' + MD.unit + ' · ' + o.time + ' min')}</span></div>`;
+    + `<div class="pv-t"><b>${esc(m.name)}</b><span class="pv-m">${esc(mode)}</span><span class="pv-i">${o.mode === 'survival' ? esc(_t('Vous contre tous · sans limite de temps')) : esc(o.limit + ' ' + MD.unit + ' · ' + o.time + ' min')}</span></div>`; // la Survie : ni limite ni durée
 }
 /* Le joueur, en tête de son équipe : son nom (celui du compte) et son niveau */
 function lobbyMe(tags) {
@@ -484,6 +486,9 @@ function lobbyMe(tags) {
 function soloStage() {
   const ffa = Settings.mode === 'ffa', MD = MODES[Settings.mode] || MODES.tdm;
   const me = lobbyMe([]), bot = (n, i) => ({ k: 'player', key: 'b' + i, label: n, bot: true }); // (leur niveau est dans le résumé des paramètres)
+  if (Settings.mode === 'survival') { // vous seul, et les onze bots en face (modeRoster les met tous chez Bravo)
+    return { head: `<b>${esc(_t('Joueurs'))}</b><span>${esc(MD.teams)}</span>`, cols: [{ cls: 'enemy', head: esc(_t('Vous contre tous')), rows: [me, ...[...BOT_NAMES[0], ...BOT_NAMES[1]].map(bot)] }] };
+  }
   if (ffa) {
     const all = [...BOT_NAMES[0], ...BOT_NAMES[1]], idx = all.map((n, i) => i), cut = all.length - FFA_BOTS;
     const off = new Set(idx.filter((i) => i % 3 === 1).concat(idx.slice().reverse()).filter((e, i, a) => a.indexOf(e) === i).slice(0, cut));
@@ -616,16 +621,17 @@ function pmView(name) {
 /* Accueil de la pause : la carte (son illustration), le mode et la limite, puis des tuiles : score des deux camps (mon camp d'abord, barres vers
    la limite), temps restant, mes éliminations et mes morts, ma classe ; la partie continue derrière, les chiffres suivent (pmSummaryTick) */
 function pmSummary() {
-  const m = mapById(MATCH.online ? NET.cfg.map : Settings.map), ffa = MATCH.mode === 'ffa', art = m.ok && MAP_ART[m.id];
-  const lim = MATCH.mode === 'dom' ? _t('{0} · premier à {1} points', modeDef().name, `<b>${MATCH.limit}</b>`) : _t('{0} · premier à {1}', modeDef().name, `<b>${MATCH.limit}</b>`);
+  const m = mapById(MATCH.online ? NET.cfg.map : Settings.map), ffa = MATCH.mode === 'ffa', surv = MATCH.mode === 'survival', art = m.ok && MAP_ART[m.id];
+  const lim = surv ? _t('{0} · vous contre tous', modeDef().name) : MATCH.mode === 'dom' ? _t('{0} · premier à {1} points', modeDef().name, `<b>${MATCH.limit}</b>`) : _t('{0} · premier à {1}', modeDef().name, `<b>${MATCH.limit}</b>`);
   const side = (k, name, you) => `<div class="ps-t ${k}"><span><span>${name}</span>${you ? ` <em>${_t('Vous')}</em>` : ''}</span><b data-ps="s${k}"></b><i class="ps-bar"><i data-ps="b${k}"></i></i></div>`;
   const mine = ffa ? 0 : PL.ent.team;
   $('pmSummary').innerHTML = `<div class="ps-map">${art ? `<img class="mapart" alt="" decoding="async" src="${art}">` : ''}<div class="ps-mt"><b>${esc(m.name)}</b><span>${lim}</span><span>${MATCH.online ? _t('Match en ligne') : _t('Solo')}</span></div></div>
-    <div class="ps-card ps-score"><p class="lbl">${_t('Score')}</p><div class="ps-teams">${ffa ? side('a', _t('Vous'), false) + side('b', _t('Meilleur adversaire'), false) : side('a', TEAM_NAMES[mine], true) + side('b', TEAM_NAMES[1 - mine], false)}</div>${ffa ? `<p class="ps-rank" data-ps="rank"></p>` : ''}</div>
-    <div class="ps-card ps-time"><p class="lbl">${_t('Temps restant')}</p><b class="ps-big" data-ps="time"></b></div>
+    <div class="ps-card ps-score"><p class="lbl">${_t('Score')}</p><div class="ps-teams">${surv ? side('a', _t('Éliminations'), false) : ffa ? side('a', _t('Vous'), false) + side('b', _t('Meilleur adversaire'), false) : side('a', TEAM_NAMES[mine], true) + side('b', TEAM_NAMES[1 - mine], false)}</div>${ffa ? `<p class="ps-rank" data-ps="rank"></p>` : ''}</div>
+    <div class="ps-card ps-time"><p class="lbl">${surv ? _t('Temps de survie') : _t('Temps restant')}</p><b class="ps-big" data-ps="time"></b></div>
     <div class="ps-card ps-me"><p class="lbl">${_t('Votre partie')}</p><div class="ps-kd"><div><b data-ps="k"></b><span>${_t('Éliminations')}</span></div><div><b data-ps="d"></b><span>${_t('Morts')}</span></div><div><b data-ps="sc"></b><span>${_t('Score')}</span></div></div></div>
     <div class="ps-card ps-cls"><p class="lbl">${_t('Classe')}</p><b data-ps="cls"></b><span data-ps="next"></span></div>`;
   PMSUM.el = {}; for (const e of $('pmSummary').querySelectorAll('[data-ps]')) PMSUM.el[e.dataset.ps] = e;
+  if (surv && PMSUM.el.ba) PMSUM.el.ba.parentNode.style.display = 'none'; // la Survie : une seule tuile, sans barre (rien à remplir vers une limite)
   pmSummaryTick();
   $('pmClassHint').textContent = Settings.loadout === PL.classIdx ? cls(PL.classIdx).name : _t('{0}, puis {1}', cls(PL.classIdx).name, cls(Settings.loadout).name);
   $('pmSub').textContent = MATCH.online ? _t('La partie continue pendant la pause') : _t('Partie en pause');
@@ -634,11 +640,11 @@ const PMSUM = { el: {} };
 /* Chiffres de l'accueil de la pause (quatre fois par seconde : la partie continue) ; écrits seulement s'ils changent */
 function pmSummaryTick() {
   const E = PMSUM.el; if (!E.time) return;
-  const ffa = MATCH.mode === 'ffa', me = PL.ent, mine = ffa ? 0 : me.team, a = MATCH.score[mine], b = MATCH.score[1 - mine];
-  hudText(E.sa, a); hudText(E.sb, b);
-  hudStyle(E.ba, 'transform', `scaleX(${clamp(a / MATCH.limit, 0, 1)})`); hudStyle(E.bb, 'transform', `scaleX(${clamp(b / MATCH.limit, 0, 1)})`);
+  const ffa = MATCH.mode === 'ffa', surv = MATCH.mode === 'survival', me = PL.ent, mine = ffa ? 0 : me.team, a = MATCH.score[mine], b = MATCH.score[1 - mine];
+  hudText(E.sa, surv ? me.kills : a); if (E.sb) hudText(E.sb, b); // la Survie : mes éliminations ; un seul camp (pmSummary)
+  hudStyle(E.ba, 'transform', `scaleX(${surv ? 0 : clamp(a / MATCH.limit, 0, 1)})`); if (E.bb) hudStyle(E.bb, 'transform', `scaleX(${clamp(b / MATCH.limit, 0, 1)})`);
   if (E.rank) hudText(E.rank, _t('Vous êtes {0}', ordinal(ffaRank())));
-  hudText(E.time, fmtTime(MATCH.timeLeft)); hudText(E.k, me.kills); hudText(E.d, me.deaths); hudText(E.sc, me.score);
+  hudText(E.time, surv ? fmtTime(-MATCH.timeLeft) : fmtTime(MATCH.timeLeft)); hudText(E.k, me.kills); hudText(E.d, me.deaths); hudText(E.sc, me.score);
   hudText(E.cls, cls(PL.classIdx).name); hudText(E.next, Settings.loadout !== PL.classIdx ? _t('Puis {0} à la prochaine réapparition', cls(Settings.loadout).name) : '');
 }
 function pmOpen() { pmView('home'); if (!(TOUCH.on && !PAD.drive)) requestAnimationFrame(() => $('resumeBtn').focus({ preventScroll: true })); } // au doigt, pas de surbrillance d'arrivée

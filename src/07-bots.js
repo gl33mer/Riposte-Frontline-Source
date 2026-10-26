@@ -9,13 +9,20 @@
    mis hors de vue (botChasing, botSearchStart) ; spin = vitesse de rotation (rad/s) d'un grand mouvement de tête, vers ce qu'il ne voit pas
    (un impact, un bruit, son chemin), un peu plus vers un adversaire en vue ; startle = surprise (s) d'un bot touché par un tireur qu'il ne
    voit pas, avant qu'il se retourne (botHurt) */
-/* Difficulté des bots de la partie : en ligne, celle que l'hôte a choisie dans le salon (NET.cfg.diff), sinon celle du Solo */
-function botDiff() { return DIFF[MATCH.online ? NET.cfg.diff : Settings.difficulty] || DIFF[1]; }
+/* Difficulté des bots de la partie : en ligne, celle que l'hôte a choisie dans le salon (NET.cfg.diff), sinon celle du Solo.
+   En Survie (solo), une ligne à part quelle que soit la difficulté choisie (DIFF_SURV, ci-dessous) : onze adversaires
+   ne se règlent pas comme un match à six contre six. */
+function botDiff() { if (MATCH.mode === 'survival') return DIFF_SURV; return DIFF[MATCH.online ? NET.cfg.diff : Settings.difficulty] || DIFF[1]; }
 const DIFF = [
   { name: _t('Recrue'), react: [0.45, 0.8], err: 0.11, settle: 1.7, head: 0.03, turn: 3.2, dmg: 0.7, nade: 0.3, see: 0.6, lag: 0.34, flinch: 1.3, tokens: 1, mem: 2.5, flair: 0.3, chase: 8, spin: 3.4, startle: [0.45, 0.7] },
   { name: _t('Régulier'), react: [0.28, 0.5], err: 0.08, settle: 1.1, head: 0.07, turn: 4.8, dmg: 0.88, nade: 0.6, see: 0.85, lag: 0.2, flinch: 1.0, tokens: 2, mem: 4, flair: 0.7, chase: 13, spin: 4.6, startle: [0.32, 0.5] },
   { name: _t('Vétéran'), react: [0.16, 0.3], err: 0.055, settle: 0.7, head: 0.14, turn: 7, dmg: 1.0, nade: 1.0, see: 1.1, lag: 0.11, flinch: 0.7, tokens: 3, mem: 6, flair: 1.0, chase: 18, spin: 5.8, startle: [0.22, 0.36] },
 ];
+/* Survie : dérivée du Régulier — réactions et visée détendues, grenades moins de la moitié (le tirage de spawnEntity décide
+   seul de les activer, à chaque vie), deux tireurs au plus visent le joueur à la fois (les autres tirent à côté : la
+   suppression reste), poursuite et mémoire courtes. La recherche de couvert, elle, ne change pas. Mêmes champs, même ordre
+   que DIFF : botDiff est appelé à chaque image (07b-tactics.js), la ligne existe avant la partie et ne se construit jamais en jeu. */
+const DIFF_SURV = { name: _t('Survie'), react: [0.3, 0.55], err: 0.08, settle: 1.1, head: 0.07, turn: 4.8, dmg: 0.85, nade: 0.45, see: 0.85, lag: 0.2, flinch: 1.0, tokens: 2, mem: 4, flair: 0.7, chase: 10, spin: 4.6, startle: [0.32, 0.5] };
 const BOT_NAMES = [
   ['Dubois', 'Keller', 'Marchetti', 'Okafor', 'Novak'],
   ['Volkov', 'Rahim', 'Karimov', 'Drago', 'Sokol', 'Petrenko'],
@@ -80,8 +87,8 @@ function makeBot(team, idx) {
   let wid = BOT_WEAPONS[(idx * 3 + team * 2) % BOT_WEAPONS.length];
   if (WEAPONS[wid].ai.sniper && entities.some((e) => !e.isPlayer && e.team === team && e.weapon.ai.sniper)) wid = 'm4'; // un seul tireur d'élite par équipe
   const def = WEAPONS[wid];
-  const b = {
-    ...BOT_STATE, id: entities.length, hfDt: 0, name: BOT_NAMES[team][idx], team, isPlayer: false, pos: new V3(), vel: new V3(), vy: 0, yaw: 0, pitch: 0,
+  const b = { // team0 : l'équipe d'origine, pour la reconstituer à chaque partie (modeRoster ; la Survie met tous les bots chez Bravo)
+    ...BOT_STATE, id: entities.length, hfDt: 0, name: BOT_NAMES[team][idx], team, team0: team, isPlayer: false, pos: new V3(), vel: new V3(), vy: 0, yaw: 0, pitch: 0,
     alive: false, health: 100, crouch: false, crouchAmt: 0, kills: 0, deaths: 0, score: 0, assists: 0, streak: 0, lastShotT: -9,
     weapon: def, mag: def.mag, reloadT: 0, fireCd: 0, burst: 0, pauseT: 0,
     target: null, visible: false, lastKnown: new V3(), lastSeenT: -99, reactT: 0, seenT: 0, aimHead: false,

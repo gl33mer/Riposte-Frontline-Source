@@ -541,6 +541,10 @@ Version actuelle : {0}. Dernières nouveautés. ⇒ Current version: {0}. Latest
 Dernière ⇒ Latest
 Version {0} ⇒ Version {0}
 Mise à jour {0} · {1} ⇒ Update {0} · {1}
+Vous contre tous ⇒ You against everyone
+Vous contre tous · sans limite de temps ⇒ You against everyone · no time limit
+Temps de survie ⇒ Survival time
+{0} · vous contre tous ⇒ {0} · you against everyone
 
 # 09h-update.js
 Nouvelle version du jeu disponible. ⇒ A new version of the game is available.
@@ -567,6 +571,10 @@ Domination, trois points à tenir ⇒ Domination, hold three points
 6 contre 6, trois points à tenir ⇒ 6 vs 6, hold three points
 Score à atteindre ⇒ Score to reach
 Restez dans la zone d'un point pour le capturer. Chaque point tenu rapporte un point toutes les 4 secondes. ⇒ Stay inside a point's zone to capture it. Each point held scores one point every 4 seconds.
+Survie ⇒ Survival
+Survie : vous seul contre tous ⇒ Survival: you against everyone
+Vous seul contre 11 bots ⇒ You alone against 11 bots
+Vous seul contre tous. Le chrono compte votre survie et les bots réapparaissent sans fin. Tenez le plus longtemps possible. ⇒ You against everyone. The clock counts your survival and bots respawn endlessly. Last as long as you can.
 Rival ⇒ Rival
 Vos apparitions retrouvent votre base ⇒ Your spawns return to your base
 Front croisé : vos apparitions passent côté adverse ⇒ Crossed fronts: your spawns switch to the opposing side
@@ -723,6 +731,8 @@ Vous gagnez avec {0} éliminations ⇒ You win with {0} kills
 Temps écoulé ⇒ Time is up
 Score atteint ⇒ Score reached
 Limite d'éliminations atteinte ⇒ Kill limit reached
+Vous avez survécu {0} · {1} éliminations ⇒ You survived {0} · {1} kills
+Éliminé ⇒ Eliminated
 
 # 09n-armurerie.js
 Classe personnalisée {0} sur {1}. Choisissez trois séries, qui ne se débloquent pas au même nombre d'éliminations ⇒ Custom class {0} of {1}. Pick three killstreaks, each unlocked at a different number of kills
@@ -1433,6 +1443,7 @@ Jouez tout de suite, rejoignez une partie publique, ou créez un salon pour vos 
 Si vous ouvrez un salon public (ou lancez "Jouer maintenant"), votre nom d'affichage, la carte, le mode et le nombre de joueurs figurent dans la liste des parties publiques, visible de tous, tant que le salon est ouvert. ⇒ If you open a public lobby (or use "Play now"), your display name, the map, the mode and the number of players appear in the public match list, visible to everyone, while the lobby is open.
 La partie commence dans ⇒ Match begins in
 En avant ! ⇒ Move out!
+Survie : tenez le plus longtemps possible ⇒ Survival: last as long as you can
 Entre amis ⇒ With friends
 Rejoindre ou lancer une partie publique ⇒ Join or start a public match
 Vous réglez la partie et invitez vos amis ⇒ You set up the match and invite your friends

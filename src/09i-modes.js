@@ -1,11 +1,13 @@
 /* ==========================================================================
    MODES DE JEU
-   Trois modes, en solo comme en ligne (l'hôte du salon choisit le mode ; en ligne, c'est lui qui décide de la fin de la partie et
-   qui tient les points de la domination, les invités en reçoivent l'état, voir domNetApply) :
+   Quatre modes : trois en solo comme en ligne (l'hôte du salon choisit le mode ; en ligne, c'est lui qui décide de la fin de la partie et
+   qui tient les points de la domination, les invités en reçoivent l'état, voir domNetApply), un en solo seulement :
      tdm  match à mort par équipe : 6 contre 6, premier camp à N éliminations ;
      ffa  match à mort : chacun pour soi, les 12 soldats s'affrontent, premier à N éliminations ;
      dom  domination : trois points à tenir (A côté d'Alpha, B au centre, C côté Bravo), chaque point tenu rapporte
-          un point de score toutes les DOM.tick secondes, premier camp à N points.
+          un point de score toutes les DOM.tick secondes, premier camp à N points ;
+     survival  survie (solo) : vous seul, les onze bots tous chez Bravo ; le chrono compte la survie, la mort du
+          joueur seule termine la partie (pas de limite, pas de séries, les bots réapparaissent sans fin).
    MATCH.mode vaut 'tdm' tant qu'aucun mode n'est choisi. Les règles d'alliance passent par
    allied(a, b) : en match à mort, personne n'est l'allié de personne, quelle que soit l'équipe d'origine du soldat (qui
    ne sert plus qu'à la tenue et à la base de départ).
@@ -21,8 +23,11 @@ const MODES = {
   dom: { name: _t('Domination'), btn: _t('Domination'), sub: _t('Domination, trois points à tenir'), teams: _t('6 contre 6, trois points à tenir'), lim: _t('Score à atteindre'), unit: 'points',
     limits: [100, 150, 200, 250], key: 'limitDom', respawn: 4, botRespawn: 4.5, prot: 2,
     hint: _t('Restez dans la zone d\u0027un point pour le capturer. Chaque point tenu rapporte un point toutes les 4 secondes.') },
+  survival: { name: _t('Survie'), btn: _t('Survie'), sub: _t('Survie : vous seul contre tous'), teams: _t('Vous seul contre 11 bots'),
+    lim: _t('Sans limite'), unit: _t('éliminations'), limits: null, key: null, respawn: Infinity, botRespawn: 5.5, prot: 2,
+    hint: _t('Vous seul contre tous. Le chrono compte votre survie et les bots réapparaissent sans fin. Tenez le plus longtemps possible.') },
 };
-const MODE_IDS = ['tdm', 'ffa', 'dom'];
+const MODE_IDS = ['tdm', 'ffa', 'dom', 'survival'];
 function modeDef() { return MODES[MATCH.mode] || MODES.tdm; }
 /* Alliés : même équipe, sauf en match à mort où chacun joue pour soi */
 function allied(a, b) { return a === b || (MATCH.mode !== 'ffa' && a.team === b.team); }
@@ -42,20 +47,24 @@ function modeStart(mode) {
   if (MATCH.mode === 'dom') domInit();
   MATCH.over = false;
   const D = modeDef();
-  document.querySelectorAll('.score .row span').forEach((s, i) => { s.textContent = MATCH.mode === 'ffa' ? [_t('Vous'), _t('Rival')][i] : TEAM_NAMES[i]; });
+  document.querySelectorAll('.score .row span').forEach((s, i) => { s.textContent = MATCH.mode === 'ffa' ? [_t('Vous'), _t('Rival')][i] : MATCH.mode === 'survival' ? [_t('Éliminations'), ''][i] : TEAM_NAMES[i]; });
   $('domRow').classList.toggle('hidden', MATCH.mode !== 'dom');
   document.querySelector('.score').classList.toggle('dom', MATCH.mode === 'dom'); // au doigt, les pastilles prennent la place de la limite (shell.html)
+  document.querySelector('.score').classList.toggle('surv', MATCH.mode === 'survival'); // la Survie : le chrono et les éliminations seulement (shell.html)
   $('domCap').className = '';
   return D;
 }
 /* Soldats en jeu et tenue de chacun. Match à mort : 7 bots seulement, tous vus en ennemis (tenue sombre, bandes rouges : skinRel),
-   pour qu'aucun ne ressemble à un allié. Autres modes : tous en jeu, alliés en clair, ennemis en sombre (06ga-tenues.js). */
+   pour qu'aucun ne ressemble à un allié. Autres modes : tous en jeu, alliés en clair, ennemis en sombre (06ga-tenues.js).
+   Survie : les onze bots en jeu, tous chez Bravo (le joueur reste seul chez Alpha), tous vus en ennemis. */
 function modeRoster() {
   const ffa = MATCH.mode === 'ffa', bots = entities.filter((e) => !e.isPlayer), cut = MATCH.online ? 0 : bots.length - FFA_BOTS; // en ligne, l'hôte active les bots (netRebalanceBots)
+  const surv = MATCH.mode === 'survival';
   // on retire des bots répartis sur les deux camps d'origine (un sur trois, puis les derniers)
   const off = new Set(ffa && cut > 0 ? bots.filter((e, i) => i % 3 === 1).concat(bots.slice().reverse()).filter((e, i, a) => a.indexOf(e) === i).slice(0, cut) : []);
   for (const e of bots) {
     e.off = off.has(e);
+    e.team = surv ? 1 : e.team0; // la Survie met tous les bots chez Bravo ; sinon, l'équipe d'origine se reconstitue à chaque partie (team0, 07-bots.js)
     if (e.off) { e.alive = false; e.respawnT = Infinity; e.target = null; e.model.rag = null; e.model.root.visible = false; }
     soldierLook(e.model, skinOf(e), skinRel(e));
   }
@@ -83,7 +92,7 @@ function ffaRank() { return ffaList().sort(ffaCmp).indexOf(PL.ent) + 1; }
 /* Limite atteinte par un tueur (éliminations) : la partie se joue sur une dernière killcam */
 function killLimitReached() {
   if (MATCH.mode === 'ffa') { ffaScore(); return ffaList().some((e) => e.kills >= MATCH.limit); }
-  if (MATCH.mode === 'dom') return false;
+  if (MATCH.mode === 'dom' || MATCH.mode === 'survival') return false; // en Survie, seule la mort du joueur termine la partie (killEnt)
   return MATCH.score[0] >= MATCH.limit || MATCH.score[1] >= MATCH.limit;
 }
 
@@ -187,7 +196,7 @@ function spawnPool(e, wide) {
   if (MATCH.mode === 'ffa') return SPAWNS[0].concat(SPAWNS[1], spawnField());
   const t = spawnBase(e.team), home = SPAWNS[t];
   if (wide) return home.concat(spawnField(), SPAWNS[1 - t]);
-  if (MATCH.mode === 'tdm') { const side = Math.sign(spawnMid(home)[1]); return home.concat(spawnField().filter((p) => p[1] * side > 6)); } // sa moitié de carte
+  if (MATCH.mode === 'tdm' || MATCH.mode === 'survival') { const side = Math.sign(spawnMid(home)[1]); return home.concat(spawnField().filter((p) => p[1] * side > 6)); } // sa moitié de carte (la Survie : le joueur aussi, il n'a pas d'alliés à rejoindre)
   return DOM.pts.some((p) => p.owner === e.team) ? home.concat(spawnField()) : home;
 }
 /* Adversaires et alliés en vie, et le front */

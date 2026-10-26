@@ -92,7 +92,7 @@ function cdGo(late) {
   $('hud').classList.remove('counting');
   const el = $('cd'); if (el.classList.contains('show')) el.className = 'cd out';
   sfxAnnounce(null, 'st_start'); // la ponctuation seule, sans voix
-  if (late) { const MD = modeDef(); hudMsg(`${MD.name} : ${MATCH.limit} ${MD.unit}`, 'xp', 3); return; }
+  if (late) { const MD = modeDef(); hudMsg(MATCH.mode === 'survival' ? _t('Survie : tenez le plus longtemps possible') : `${MD.name} : ${MATCH.limit} ${MD.unit}`, 'xp', 3); return; }
   const go = $('cdGo'); go.textContent = _t('En avant !'); go.classList.remove('show'); void go.offsetWidth; go.classList.add('show');
   lanePump(); // une annonce retenue pendant le décompte passe maintenant
 }

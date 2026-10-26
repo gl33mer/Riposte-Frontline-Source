@@ -159,9 +159,11 @@ function touchPickIcon(mk) {
 function touchKsIcons() {
   if (!TC.root) return;
   PL.ksSel.forEach((k, i) => {
-    const b = TC.el['ks' + (i + 1)]; if (b.dataset.ks === k) return;
+    const b = TC.el['ks' + (i + 1)]; b.style.display = ''; // un bouton rempli redevient visible (ceux sans série sont masqués juste après)
+    if (b.dataset.ks === k) return;
     b.dataset.ks = k; b.setAttribute('aria-label', KSDEF[k].name); b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${KSDEF[k].icon}</svg>`;
   });
+  for (let i = PL.ksSel.length; i < 3; i++) TC.el['ks' + (i + 1)].style.display = 'none'; // emplacements sans série (Survie) : pas de bouton
   // bouton Grenade : le type de la classe (NADE_TYPES)
   const g = TC.el.nade, N = NADE_TYPES[PL.nadeType]; if (!g || !N || g.dataset.ty === PL.nadeType) return;
   g.dataset.ty = PL.nadeType; g.setAttribute('aria-label', N.long); g.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${N.icon}</svg>`;
