@@ -84,7 +84,7 @@ function killEnt(v, a, weapon, head, dir, life) {
   if (v.isPlayer) {
     if (PILOT.d) fpvLeave(); // la vue revient au corps ; le drone tombe (fpvStep)
     PL.deathT = 0; PL.killer = a !== v ? a : null; PL.reload = null; dropCookedNade(); PL.nadeState = null; PL.knifeT = 0; PL.knifeOut = false; PL.knifeHold = 0; PL.knifeBtn = null; vmClearHeld();
-      KC.pending = a && a !== v && a.model && weapon !== NET_WSPECIAL.heli && weapon !== NET_WSPECIAL.drone && weapon !== NET_WSPECIAL.mecha && weapon !== NET_WSPECIAL.fall && weapon !== NET_WSPECIAL.zone ? a : null; KC.deathT = MATCH.time; // (le nom traduit : en anglais, 'Hélicoptère' ne correspondait jamais)
+      KC.pending = a && a !== v && a.model && MATCH.mode !== 'survival' && weapon !== NET_WSPECIAL.heli && weapon !== NET_WSPECIAL.drone && weapon !== NET_WSPECIAL.mecha && weapon !== NET_WSPECIAL.fall && weapon !== NET_WSPECIAL.zone ? a : null; KC.deathT = MATCH.time; // (le nom traduit : en anglais, 'Hélicoptère' ne correspondait jamais) ; la Survie : pas de relecture de sa mort — sans elle, la fin de relecture réapparaît sur-le-champ (endKillcam), au lieu d'attendre le passage
     if (KC.pending) KC.info = `<span class="enemy">${esc(a.name)}</span><i>${esc(weapon)}</i><i>${Math.round(a.pos.distanceTo(v.pos))} m</i>`;
     showDeathScreen(a, weapon, head);
   } else {

@@ -599,7 +599,7 @@ function survStart() {
   const c = SURV.carry; SURV.carry = null;
   SURV.round = c ? c.round : 1;
   if (c) { PL.ent.kills = c.kills; MATCH.timeLeft = c.timeLeft; } // startMatch vient de les remettre à zéro (09-game.js)
-  else if (!(MATCH.online && NET.role !== 'host')) SURV.queue = MAPS.filter((m) => m.ok).map((m) => m.id).sort(() => Math.random() - 0.5); // la file des cartes, battue au départ (même battage que botKs) ; en ligne, seul l'hôte la tient (survNextMap, survNetMap)
+  else if (!(MATCH.online && NET.role !== 'host')) SURV.queue = MAPS.filter((m) => m.ok && m.id !== MAPL.id).map((m) => m.id).sort(() => Math.random() - 0.5); // la file des cartes, battue au départ, sans celle en cours (déjà jouée : elle ne reviendra qu'au cycle suivant) ; en ligne, seul l'hôte la tient (survNextMap, survNetMap)
   SURV.phase = 'combat'; SURV.hold = 0; SURV.t = 120 + 30 * (SURV.round - 1);
   if (c) hudMsg(_t('Manche {0}', SURV.round), 'xp', 2.5);
 }
@@ -715,7 +715,7 @@ function survMinimap(g, scale) {
 /* La file des cartes, battue au départ de la partie (survStart) : chaque passage prend la suivante ;
    vide, elle se rebat. Jamais deux fois la même d'affilée quand c'est évitable (le battage de botKs) */
 function survNextMap() {
-  if (!SURV.queue || !SURV.queue.length) SURV.queue = MAPS.filter((m) => m.ok).map((m) => m.id).sort(() => Math.random() - 0.5);
+  if (!SURV.queue || !SURV.queue.length) SURV.queue = MAPS.filter((m) => m.ok && m.id !== MAPL.id).map((m) => m.id).sort(() => Math.random() - 0.5); // rebattue sans la carte en cours : celle d'où l'on vient attend le cycle suivant
   let id = SURV.queue.shift();
   if (id === MAPL.id && SURV.queue.length) { SURV.queue.push(id); id = SURV.queue.shift(); }
   return id;
@@ -773,6 +773,7 @@ async function survTransition(mapId, carry) {
       NET.shots = 0; NET.lastPub = 0; PL.ent.netQ = { seq: 0, list: [] }; NET.goneK = [0, 0];
     }
     startMatch(MATCH.online ? { online: true } : undefined);
+    if (MATCH.online && NET.role === 'host') netRebalanceBots(); // comme au lancement (netStartOnlineNow) : sans lui, la manche suivante démarre sans aucun bot
   } };
   UI.flow = F; // menuLoading s'y réfère pour la progression et l'annulation
   let ok = false;
