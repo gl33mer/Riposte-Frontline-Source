@@ -549,6 +549,7 @@ Temps de survie ⇒ Survival time
 Nouvelle version du jeu disponible. ⇒ A new version of the game is available.
 Nouvelle version du jeu disponible. Elle se chargera en quittant le salon. ⇒ A new version of the game is available. It will load when you leave the lobby.
 Nouvelle version du jeu disponible. Elle se chargera à la fin de la partie. ⇒ A new version of the game is available. It will load when the match ends.
+Cliquez pour vérifier les mises à jour. ⇒ Click to check for updates.
 
 # 09i-chat.js
 Aucun message. Appuyez sur T pour écrire. ⇒ No messages. Press T to write.

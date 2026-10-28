@@ -35,11 +35,11 @@ function renderNews() {
     <ul class="chg">${newsChanges(r.changes)}</ul></article>`).join('');
   newsMarkSeen();
 }
-/* Pastille « Nouveau » du menu principal et numéro de version */
+/* Pastille « Nouveau » du menu principal et numéro de version (le pied du menu, #verTag, est tenu par 09h-update.js :
+   il y ajoute l'identifiant de construction, la date et l'état des mises à jour) */
 function newsBadge() {
   $('mmNewsBadge').classList.toggle('hidden', !newsUnseen());
   $('mmNews').textContent = _t('Version {0}', GAME_VERSION);
-  $('verTag').textContent = _t('Version {0}', GAME_VERSION);
 }
 function newsClose() { $('whatsnew').classList.add('hidden'); newsMarkSeen(); }
 /* Fenêtre « Quoi de neuf » : une fois par grande version, jamais sur un lien d'invitation à un salon */

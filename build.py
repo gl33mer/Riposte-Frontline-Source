@@ -241,7 +241,12 @@ print("musique des menus :",music or "aucune")
 # Le jeu compare les deux pour se recharger quand une nouvelle version est en ligne (voir src/09h-update.js et vercel.json).
 build_id=hashlib.sha1(html.encode("utf-8")).hexdigest()[:12]
 html=html.replace("__BUILD_ID__",build_id)
-print("identifiant de version :",build_id)
+# Date de construction (heure locale) : affichée à côté de l'identifiant au pied du menu principal (src/09h-update.js)
+# et publiée dans dist/version.json. Posée après le condensat : la page reste identifiée par son contenu — deux
+# constructions des mêmes sources donnent le même identifiant — et non par l'heure.
+build_date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+html=html.replace("__BUILD_DATE__",build_date)
+print("identifiant de version :",build_id,"·",build_date)
 # Politique de sécurité du contenu (CSP, balise meta en tête : elle suit chaque construction) : scripts du site seulement, plus les
 # scripts en ligne de la page désignés par leur empreinte ; un script glissé dans la page par une faille (attribut onerror, balise
 # injectée) ne s'exécute pas, et les données ne partent que vers le site et le serveur de jeu. frame-ancestors et X-Frame-Options ne
@@ -261,7 +266,7 @@ html=html.replace('<meta charset="utf-8">','<meta charset="utf-8">\n<meta http-e
 print("CSP :",len(inline),"scripts en ligne,",("relais "+host) if relay else "PeerJS")
 os.makedirs("dist", exist_ok=True)
 open("dist/riposte-frontline.html","w",encoding="utf-8").write(html)
-with open("dist/version.json","w",encoding="utf-8") as f: f.write(json.dumps({"build":build_id,"version":log[0]["version"]})+"\n")
+with open("dist/version.json","w",encoding="utf-8") as f: f.write(json.dumps({"build":build_id,"version":log[0]["version"],"date":build_date})+"\n")
 # Serveur de jeu (serveur/, voir serveur/README.md) : son code est publié avec le jeu dans dist/serveur/ (le serveur s'y met à
 # jour seul, riposte-maj), et serveur/installer.sh, le script à coller à la création du serveur, est refait ici : il embarque
 # le même code. Version : condensat des fichiers. Absent (copie publique du code,

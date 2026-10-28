@@ -66,10 +66,28 @@ function updMsgSet() {
   UPD.el.classList.toggle('main', MATCH.state === 'menu' && UI.screen === 'main' && !$('ui').classList.contains('hidden'));
   UPD.el.classList.toggle('hidden', UPD.closed || (play && performance.now() - UPD.playT > 8000));
 }
+/* Identifiant de version au pied du menu principal (#verTag) : numéro de version, identifiant de construction (six
+   caractères, le même que celui du rapport de performances), date de construction et état des mises à jour. Un clic
+   force un contrôle — et charge la nouvelle version si elle est prête. De quoi vérifier d'un coup d'œil que la page
+   servie est bien la dernière construite. */
+const BUILT_DATE = ((document.querySelector('meta[name="cod-built"]') || {}).content || '').trim();
+function updBadge() {
+  const el = $('verTag'); if (!el) return;
+  const on = updOn();
+  const txt = _t('Version {0}', GAME_VERSION) + (BUILD_ID ? ' · ' + BUILD_ID.slice(0, 6) : '');
+  if (el.textContent !== txt) el.textContent = txt;
+  const hint = !on ? '' : UPD.pending ? _t('Nouvelle version du jeu disponible.') : _t('Cliquez pour vérifier les mises à jour.');
+  el.title = _t('Version {0}', GAME_VERSION) + (BUILD_ID ? ' · build ' + BUILD_ID : '') + (BUILT_DATE ? ' · ' + BUILT_DATE : '') + (hint ? ' · ' + hint : '');
+  el.classList.toggle('upd', UPD.pending);
+  el.style.cursor = on ? 'pointer' : '';
+}
 function updInit() {
   // l'adresse de rechargement (?v=...) ne sert qu'une fois : on la retire, sans toucher au reste (lien d'invitation ?salon=...)
   const u = new URL(location.href);
   if (u.searchParams.has('v')) { u.searchParams.delete('v'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }
+  updBadge();
+  const badge = $('verTag');
+  if (badge && updOn()) badge.addEventListener('click', () => { updCheck(true); if (UPD.pending) updApply(); }); // un clic : contrôle, puis chargement si une version attend
   if (!updOn()) return;
   updCheck(true);
   addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') updCheck(); });
@@ -79,7 +97,7 @@ function updInit() {
   // une mise à jour en attente se fait dès le retour au menu (fin de partie, salon quitté)
   setInterval(() => {
     if (UPD.pending && updSafe()) updApply();
-    updMsgSet();
+    updMsgSet(); updBadge(); // le pied du menu suit l'état (identifiant, « nouvelle version prête »)
   }, 1000);
 }
 updInit();
