@@ -204,7 +204,7 @@ function zoneDeath(e) {
 /* Écran du joueur hors de la zone : voile qui s'assombrit à mesure que le temps passe, message et secondes restantes */
 const RINGHUD = { on: false, n: -1 };
 function ringHud(e) {
-  const el = $('ringOut'); if (!el) return;
+  const el = HUDE.ringOut; if (!el) return;
   const show = RING.on && e && e.alive && (e.outT || 0) > 0;
   if (show !== RINGHUD.on) { RINGHUD.on = show; el.classList.toggle('show', show); RINGHUD.n = -1; }
   if (!show) return;

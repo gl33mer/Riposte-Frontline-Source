@@ -163,6 +163,10 @@ function botAirstrike(b) {
 
 /* ---------- HUD ---------- */
 const HUD = { mmAt: 0, lastAmmo: '', msgT: 0, hitT: 0, xhairGap: 20, kick: 0, chain: 0, tagT: 0, board: false, boardT: 0, dMode: '', mm: null, mmStatic: null, mmFit: true, k: '', mode: '', rkT: 0, jam: null, fpvMode: '' }; // jam : neige de la mini-carte brouillée (mmJamDraw)
+/* Références des éléments du HUD, lues une fois au démarrage (hudElsInit) : updateHud les lisait par getElementById à
+   chaque image (une vingtaine de lectures par image, à chaque image : un coût évitable, surtout sur les machines modestes). */
+const HUDE = { hud: null, scA: null, scB: null, barA: null, barB: null, timer: null, scLim: null, prot: null, reloadHint: null, zone: null, mag: null, reserve: null, wname: null, nades: null, pips: null, xhair: null, scope: null, breath: null, breathHint: null, scopeMask: null, dmgind: null, domCap: null, domCapT: null, domCapF: null, ringOut: null, minimap: null };
+function hudElsInit() { for (const k in HUDE) HUDE[k] = $(k); } // les clés sont les identifiants des éléments (scA, timer…)
 addEventListener('resize', () => { HUD.mmFit = true; }); // mini-carte : bitmap à la taille affichée (drawMinimap)
 /* Message au centre haut (à --msg-top) ; html : le texte porte un glyphe de touche (actGlyph), déjà échappé */
 function hudMsg(text, kind, dur, html) {
@@ -247,7 +251,7 @@ function fmtTime(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60
 /* Mini-carte, à chaque image : dessinée en unités de 240 (W, H), sur un bitmap à la taille affichée et à la densité de l'écran (au plus 2), recalculé
    seulement quand la taille change (HUD.mmFit : fenêtre, réglage de taille, passage au doigt) */
 function drawMinimap() {
-  const cv = $('minimap'), g = HUD.mm, W = 240, H = 240, scale = MM_ZOOM, now = MATCH.time, C = HUD.mmCol;
+  const cv = HUDE.minimap, g = HUD.mm, W = 240, H = 240, scale = MM_ZOOM, now = MATCH.time, C = HUD.mmCol;
   if (HUD.mmFit) { HUD.mmFit = false; const px = clamp(Math.round((cv.clientWidth || 200) * Math.min(2, devicePixelRatio || 1)), 120, 600); if (cv.width !== px) cv.width = cv.height = px; }
   const e = PL.ent, yaw = PL.yaw, k0 = cv.width / W;
   g.setTransform(k0, 0, 0, k0, 0, 0);
@@ -317,22 +321,22 @@ function hudVar(el, name, v) { const k = '__v' + name; if (el[k] !== v) { el[k] 
 function hudHtml(el, v) { if (el.__h !== v) { el.__h = v; el.innerHTML = v; } } // texte qui porte un glyphe de touche (actGlyph)
 function hudCls(el, c, on) { const k = '__c' + c; if (el[k] !== on) { el[k] = on; el.classList.toggle(c, on); } }
 function updateHud(dt) {
-  const e = PL.ent, w = curW(), d = w.def, now = MATCH.time, mode = inputMode(), hud = $('hud');
+  const e = PL.ent, w = curW(), d = w.def, now = MATCH.time, mode = inputMode(), hud = HUDE.hud;
   // taille de l'interface en jeu (Options, Jeu) : --hud-k multiplie --hu ; au doigt, le HUD est en u et ne change pas
   const k = TOUCH.on ? '1' : String(Settings.hudScale || 1);
   if (HUD.k !== k + TOUCH.on) { HUD.k = k + TOUCH.on; hud.style.setProperty('--hud-k', k); HUD.mmFit = true; } // (passer au doigt change aussi la taille de la mini-carte)
   if (mode !== HUD.mode) { updateStreakHud(); if (!e.alive) deathPrompt(); } // glyphes des séries prêtes et de la réapparition : clavier, manette ou doigt
-  if (MATCH.mode === 'survival') { hudText($('scA'), e.kills); hudText($('timer'), fmtTime(SURV.t)); } // la Survie : mes éliminations, et le chrono de la manche (0:00 pendant l'extraction : fmtTime ramène tout à 0)
-  else { hudText($('scA'), MATCH.score[0]); hudText($('scB'), MATCH.score[1]); hudText($('timer'), fmtTime(MATCH.timeLeft)); }
-  hudStyle($('barA'), 'transform', `scaleX(${MATCH.score[0] / MATCH.limit})`); hudStyle($('barB'), 'transform', `scaleX(${MATCH.score[1] / MATCH.limit})`);
+  if (MATCH.mode === 'survival') { hudText(HUDE.scA, e.kills); hudText(HUDE.timer, fmtTime(SURV.t)); } // la Survie : mes éliminations, et le chrono de la manche (0:00 pendant l'extraction : fmtTime ramène tout à 0)
+  else { hudText(HUDE.scA, MATCH.score[0]); hudText(HUDE.scB, MATCH.score[1]); hudText(HUDE.timer, fmtTime(MATCH.timeLeft)); }
+  hudStyle(HUDE.barA, 'transform', `scaleX(${MATCH.score[0] / MATCH.limit})`); hudStyle(HUDE.barB, 'transform', `scaleX(${MATCH.score[1] / MATCH.limit})`);
   // match à mort : le rang trie tous les soldats, quatre fois par seconde suffisent
-  if (MATCH.mode === 'ffa' && (HUD.rkT -= dt) <= 0) { HUD.rkT = 0.25; hudText($('scLim'), `${_t('Premier à {0} · vous êtes {1}', MATCH.limit, ordinal(ffaRank()))}`); }
+  if (MATCH.mode === 'ffa' && (HUD.rkT -= dt) <= 0) { HUD.rkT = 0.25; hudText(HUDE.scLim, `${_t('Premier à {0} · vous êtes {1}', MATCH.limit, ordinal(ffaRank()))}`); }
   // la Survie : la tenue du point d'extraction — la barre fine, et le gros compte à rebours du départ de partie (« Extraction dans », survHoldShow)
-  const sbar = $('domCap'), scls = MATCH.mode === 'survival' && SURV.phase === 'extraction' && PL.ent.alive
+  const sbar = HUDE.domCap, scls = MATCH.mode === 'survival' && SURV.phase === 'extraction' && PL.ent.alive
     && Math.abs(PL.ent.pos.y - SURV.y) <= 2.2 && hyp(PL.ent.pos.x - SURV.x, PL.ent.pos.z - SURV.z) <= SURV.rad ? 'show hot' : '';
   if (sbar.className !== scls) sbar.className = scls;
   if (scls) {
-    hudText($('domCapT'), _t('Extraction en cours')); hudStyle($('domCapF'), 'transform', `scaleX(${(SURV.hold / SURV.holdMax).toFixed(3)})`);
+    hudText(HUDE.domCapT, _t('Extraction en cours')); hudStyle(HUDE.domCapF, 'transform', `scaleX(${(SURV.hold / SURV.holdMax).toFixed(3)})`);
     const n = Math.max(1, Math.ceil(SURV.holdMax - SURV.hold)); // le chiffre de tête ne change qu'une fois par seconde
     if (n !== SURV.shown) { const first = !SURV.shown; SURV.shown = n; survHoldShow(n, first); }
   } else if (SURV.shown) { SURV.shown = 0; $('cd').className = 'cd'; } // hors du point, ou plus en vie : le compte s'efface
@@ -341,23 +345,23 @@ function updateHud(dt) {
   const ammo = `${kn ? 'k' : w.mag + '|' + w.reserve + '|' + d.name}|${PL.nades}${PL.nadeType}|${mode}`;
   if (ammo !== HUD.lastAmmo) {
     HUD.lastAmmo = ammo;
-    $('mag').textContent = w.mag; $('reserve').textContent = w.reserve; $('wname').textContent = kn ? _t('Couteau') : d.name;
-    $('mag').parentNode.style.visibility = kn ? 'hidden' : '';
-    $('mag').classList.toggle('low', !kn && w.mag <= Math.ceil(d.mag * 0.25));
+    HUDE.mag.textContent = w.mag; HUDE.reserve.textContent = w.reserve; HUDE.wname.textContent = kn ? _t('Couteau') : d.name;
+    HUDE.mag.parentNode.style.visibility = kn ? 'hidden' : '';
+    HUDE.mag.classList.toggle('low', !kn && w.mag <= Math.ceil(d.mag * 0.25));
     // grenades : la touche qui les lance (rien au doigt) puis une icône par grenade, pleine ou vide, à la forme du type de la classe
     const nn = Math.max(PL.nades, CLASSES[PL.classIdx].nades), ty = PL.nadeType === 'frag' ? '' : ` ${PL.nadeType}`;
-    $('nades').innerHTML = (nn ? actGlyph('nade') : '') + Array.from({ length: nn }, (x, i) => `<i class="${i < PL.nades ? '' : 'off'}${ty}"></i>`).join('');
-    const pips = $('pips'); const n = kn ? 0 : Math.min(d.mag, 40);
+    HUDE.nades.innerHTML = (nn ? actGlyph('nade') : '') + Array.from({ length: nn }, (x, i) => `<i class="${i < PL.nades ? '' : 'off'}${ty}"></i>`).join('');
+    const pips = HUDE.pips; const n = kn ? 0 : Math.min(d.mag, 40);
     if (pips.children.length !== n) { pips.innerHTML = ''; for (let i = 0; i < n; i++) pips.appendChild(document.createElement('i')); }
     for (let i = 0; i < n; i++) pips.children[i].className = i < w.mag ? '' : 'spent';
   }
   // invite de rechargement : chargeur au quart ou vide (en rouge), avec la touche ou le bouton du mode d'entrée
-  const rh = $('reloadHint'), low = e.alive && !PL.knifeOut && w.mag <= Math.ceil(d.mag * 0.25) && !PL.reload && w.reserve > 0;
+  const rh = HUDE.reloadHint, low = e.alive && !PL.knifeOut && w.mag <= Math.ceil(d.mag * 0.25) && !PL.reload && w.reserve > 0;
   hudStyle(rh, 'opacity', low ? '1' : '0');
   if (low) { const g = actGlyph('reload'); hudHtml(rh, g ? _t('{0} Recharger', g) : _t('Recharger')); hudCls(rh, 'empty', w.mag === 0); }
-  if ((HUD.zT = (HUD.zT || 0) - dt) <= 0) { hudText($('zone'), zoneName(e.pos.x, e.pos.z)); HUD.zT = 0.3; }
+  if ((HUD.zT = (HUD.zT || 0) - dt) <= 0) { hudText(HUDE.zone, zoneName(e.pos.x, e.pos.z)); HUD.zT = 0.3; }
   arsLevelTick(dt); // niveau du joueur franchi en cours de partie (06r-arsenal.js)
-  { const t = performance.now(); if (t - HUD.mmAt >= 8) { HUD.mmAt = t; drawMinimap(); } } // mini-carte : 120 fois par seconde au plus (à 280 images par seconde, elle se redessinait à chacune)
+  { const t = performance.now(); if (t - HUD.mmAt >= 16) { HUD.mmAt = t; drawMinimap(); } } // mini-carte : 60 fois par seconde au plus (au-delà, le redessin n'apporte rien ; c'était 8 ms, jusqu'à 125 fois par seconde sur un écran rapide)
   // réticule
   const ads = VM.ads, spd = hyp(e.vel.x, e.vel.z);
   let spread = lerp(d.spread[0], d.spread[1], ads) + d.moveSpread * clamp(spd / MOVE_SPEED, 0, 1.5) + PL.bloom + (PL.onGround ? 0 : 0.05);
@@ -365,21 +369,21 @@ function updateHud(dt) {
   const focal = VIEW.h / (2 * Math.tan((camera.fov * Math.PI) / 360));
   HUD.xhairGap = damp(HUD.xhairGap, 6 + Math.tan(spread) * focal, 20, dt);
   HUD.kick = damp(HUD.kick, 0, 14, dt);
-  const xh = $('xhair'), gap = HUD.xhairGap + HUD.kick;
+  const xh = HUDE.xhair, gap = HUD.xhairGap + HUD.kick;
   hudStyle(xh, 'opacity', !e.alive || ads > 0.6 || PL.sprinting || PL.knifeT > 0 || PL.knifeOut || KS.mode || playHold() ? '0' : '0.9'); // (décompte : l'anneau prend sa place)
   hudVar(xh, '--gap', (Math.round(gap * 2) / 2).toFixed(1) + 'px'); // demi-pixel : pas de nouveau style pour un écart invisible
   const scoped = !!(d.scope && ads > 0.92 && e.alive);
-  $('scope').classList.toggle('on', scoped);
+  HUDE.scope.classList.toggle('on', scoped);
   if (scoped) {
-    hudStyle($('breath'), 'transform', `scaleX(${clamp(PL.breath, 0, 1).toFixed(3)})`);
-    const g = actGlyph('sprint'); hudHtml($('breathHint'), g ? _t('{0} Retenir son souffle', g) : ''); // au doigt : le bouton (s'il est gardé)
+    hudStyle(HUDE.breath, 'transform', `scaleX(${clamp(PL.breath, 0, 1).toFixed(3)})`);
+    const g = actGlyph('sprint'); hudHtml(HUDE.breathHint, g ? _t('{0} Retenir son souffle', g) : ''); // au doigt : le bouton (s'il est gardé)
   }
   FinalShader.uniforms.uAberr.value = Math.max(d.scope && ads > 0.92 ? 1.6 : 0.0, PL.aberr || 0);
-  { const k = PL.boltT > 0 ? Math.sin(clamp((1 - PL.boltT / 1.05) * 1.25, 0, 1) * Math.PI) : 0; hudStyle($('scopeMask'), 'transform', k ? `translate(${k * 6}px, ${k * 22}px) rotate(${k * 1.6}deg)` : ''); }
+  { const k = PL.boltT > 0 ? Math.sin(clamp((1 - PL.boltT / 1.05) * 1.25, 0, 1) * Math.PI) : 0; hudStyle(HUDE.scopeMask, 'transform', k ? `translate(${k * 6}px, ${k * 22}px) rotate(${k * 1.6}deg)` : ''); }
   // indicateurs de dégâts
-  const box = $('dmgind');
+  const box = HUDE.dmgind;
   while (box.children.length < PL.dmgInd.length) box.appendChild(document.createElement('i'));
-  PL.dmgInd = PL.dmgInd.filter((k) => (k.t -= dt) > 0);
+  { const A = PL.dmgInd; let w = 0; for (let i = 0; i < A.length; i++) { const k = A[i]; if ((k.t -= dt) > 0) A[w++] = k; } A.length = w; } // compacté en place : pas de nouveau tableau par image
   for (let i = 0; i < box.children.length; i++) {
     const el = box.children[i], k = PL.dmgInd[i];
     if (!k) { hudStyle(el, 'opacity', '0'); continue; }
@@ -839,6 +843,9 @@ function frame(now) {
   allyMarksUpdate(); // marqueurs d'alliés (09m-marqueurs.js) : la caméra est définitive
   updateSoldierLods(); clothUpdate(dt); updateMapDetail(); grassUpdate(now / 1000); // clothUpdate : tissus des soldats (06gb-tissu.js), après le choix des modèles détaillés
   pfrLap(4); updateShadows(); pfrLap(5);
+  // la passe de la vue subjective ne sert que si quelque chose y est visible (arme, douilles, écran du mecha) : écran de
+  // mort, écran de fin et vues sans arme la sautent (les quatre lumières seules ne dessinent rien)
+  if (vmPass) { let vmVis = false; for (const o of vmScene.children) if (o.visible && !o.isLight) { vmVis = true; break; } vmPass.enabled = vmVis; }
   if (GPUT) GPUT.begin();
   renderFrame(dt); pfrLap(6);
   if (GPUT) GPUT.end();
@@ -974,6 +981,7 @@ async function boot() {
     await step(_t('Préparation des menus'), 85);
     buildTabletRig(); buildPhoneRig();
     buildMenu();
+    hudElsInit(); // références des éléments du HUD (une seule lecture par élément, voir HUDE)
     await step(_t('Prêt'), 100);
     GPUX.booted = true; GPUX.booting = false;
     MATCH.state = 'menu';

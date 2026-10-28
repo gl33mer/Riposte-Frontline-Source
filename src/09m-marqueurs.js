@@ -32,7 +32,7 @@ function allyMarksHide() {
 }
 function allyMarksUpdate() {
   const me = PL.ent;
-  if (!Settings.allyMarks || MATCH.mode === 'ffa' || !me.alive || (MATCH.state !== 'playing' && MATCH.state !== 'paused') || $('scope').classList.contains('on')) return allyMarksHide();
+  if (!Settings.allyMarks || MATCH.mode === 'ffa' || !me.alive || (MATCH.state !== 'playing' && MATCH.state !== 'paused') || HUDE.scope.classList.contains('on')) return allyMarksHide();
   camera.updateMatrixWorld();
   const W = VIEW.w, H = VIEW.h, cp = camera.position;
   const now = performance.now();

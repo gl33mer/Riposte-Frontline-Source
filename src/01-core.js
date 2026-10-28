@@ -348,6 +348,9 @@ const LAYER_NEAR = 1;
    joueur) : la caméra ne le voit que pendant le calcul des cartes d'ombre, ils ne coûtent donc rien à l'écran.
    MASK_SCREEN : maillage affiché (passe principale et pré-passe) ; MASK_SHADOW : ombre seule. */
 const LAYER_SHADOW = 3;
+/* Calque des objets à découpe (feuillages, grillages, filets) pour la passe de normales de l'occlusion : la passe ne
+   rend qu'eux, au lieu de masquer toute la scène à chaque image puis de la rétablir (voir ssaoCutPass, markPrepass). */
+const LAYER_CUT = 4;
 const MASK_SCREEN = 1 | (1 << LAYER_PREPASS), MASK_SHADOW = 1 << LAYER_SHADOW;
 {
   const gl = renderer.getContext(), blit = gl.blitFramebuffer.bind(gl);
@@ -1123,8 +1126,12 @@ function prepassEligible(o) {
   if (!m || Array.isArray(m) || !(m.isMeshStandardMaterial || m.isMeshBasicMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial)) return false;
   return !m.transparent && !m.alphaTest && m.depthWrite && m.depthTest && m.colorWrite && m.depthFunc === THREE.LessEqualDepth && !m.wireframe && m.side !== THREE.BackSide && !m.alphaMap && !m.displacementMap;
 }
+/* Objet à découpe pour les normales de l'occlusion ambiante (voir ssaoCutPass) : même test que la collecte de
+   overrideVisibility, sans la visibilité (l'appartenance au calque ne dépend pas de l'état de l'objet). */
+function ssaoCutEligible(o) { const m = o.material; return !!(o.isMesh && m && !Array.isArray(m) && m.alphaTest && m.map); }
 function markPrepass(root) {
   root.traverse((o) => {
+    if (ssaoCutEligible(o)) o.layers.enable(LAYER_CUT); else o.layers.disable(LAYER_CUT); // découpes : calque de la passe de normales
     if (o.isLight) o.layers.enable(LAYER_PREPASS);
     else if (o.userData.noPrepass || o.layers.isEnabled(LAYER_SHADOW)) return; // niveaux de détail gérés à part, ombre seule
     else if (prepassEligible(o)) o.layers.enable(LAYER_PREPASS);
@@ -1145,17 +1152,22 @@ function ssaoCutMat(m) {
   n.customProgramCacheKey = () => 'ssaocut';
   SSAO_CUT.set(m, n); return n;
 }
-/* Seconde moitié de la passe de normales : seuls les objets à découpe, avec leur matière de normales, dans la même cible */
+/* Seconde moitié de la passe de normales : seuls les objets à découpe, avec leur matière de normales, dans la même cible.
+   Le calque LAYER_CUT remplace le masquage de toute la scène (markPrepass le pose une fois pour toutes) : plus aucun
+   parcours d'objets ni tableau par image, et rien à rétablir côté scène. Les objets (matière, visibilité d'avant la
+   passe) sont gardés dans un tableau réutilisé à pas de trois. */
+const _cutRec = [];
 function ssaoCutPass(pass, renderer, target, cuts) {
-  const scene = pass.scene, vis = [], mats = [];
-  scene.traverse((o) => { if (o.isMesh || o.isPoints || o.isLine || o.isSprite) { vis.push([o, o.visible]); o.visible = false; } });
-  for (const o of cuts) { mats.push([o, o.material]); o.material = ssaoCutMat(o.material); o.visible = true; }
-  const ac = renderer.autoClear;
+  const cam = pass.camera, mask = cam.layers.mask, ac = renderer.autoClear;
+  _cutRec.length = 0;
+  for (const o of cuts) { _cutRec.push(o, o.material, o.visible); o.material = ssaoCutMat(o.material); o.visible = true; }
+  cam.layers.set(LAYER_CUT);
   renderer.setRenderTarget(target); renderer.autoClear = false;
-  renderer.render(scene, pass.camera);
-  renderer.autoClear = ac; renderer.setRenderTarget(pass.beautyRenderTarget);
-  for (const [o, m] of mats) o.material = m;
-  for (const [o, v] of vis) o.visible = v;
+  try { renderer.render(pass.scene, cam); }
+  finally {
+    renderer.autoClear = ac; renderer.setRenderTarget(pass.beautyRenderTarget); cam.layers.mask = mask;
+    for (let i = 0; i < _cutRec.length; i += 3) { _cutRec[i].material = _cutRec[i + 1]; _cutRec[i].visible = _cutRec[i + 2]; }
+  }
 }
 let composer, prePass, worldPass, vmPass, bloomPass, raysPass, finalPass, msaaTarget, ssaoPass = null;
 /* Densité de pixels : la toile (canvas) suit toujours l'écran (jusqu'à 2) ; le rendu 3D suit l'écran dans la limite du

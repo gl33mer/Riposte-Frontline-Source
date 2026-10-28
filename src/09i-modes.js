@@ -81,7 +81,7 @@ function modeUpdate(dt) {
   for (const e of entities) {
     if (e.protT > 0) { e.protT -= dt; if (e.lastShotT > e.spawnAt) e.protT = 0; } // tirer fait perdre la protection
   }
-  hudStyle($('prot'), 'opacity', PL.ent.alive && PL.ent.protT > 0 ? '1' : '0');
+  hudStyle(HUDE.prot, 'opacity', PL.ent.alive && PL.ent.protT > 0 ? '1' : '0');
   if (MATCH.mode === 'ffa') ffaScore();
   else if (MATCH.mode === 'dom') domUpdate(dt);
   else if (MATCH.mode === 'survival') survUpdate(dt);
@@ -532,12 +532,12 @@ function domHud(dt) {
     if (here) inside = p;
   }
   // barre de capture (sous les invites du réticule) : teinte par classe (shell.html, jetons), écrite seulement quand elle change
-  const bar = $('domCap');
+  const bar = HUDE.domCap;
   let cls = '';
   if (inside) {
     const p = inside, mv = Math.abs(p.v), mine = (p.v > 0) === (me.team === 0);
-    hudText($('domCapT'), p.contest ? `${_t('Point {0} contesté', p.name)}` : p.owner === me.team && mv >= 1 ? _t('Point {0} tenu', p.name) : p.owner === -1 || !mine ? `${_t('Capture du point {0}', p.name)}` : _t('Point {0} : reprise', p.name));
-    hudStyle($('domCapF'), 'transform', `scaleX(${mv.toFixed(3)})`);
+    hudText(HUDE.domCapT, p.contest ? `${_t('Point {0} contesté', p.name)}` : p.owner === me.team && mv >= 1 ? _t('Point {0} tenu', p.name) : p.owner === -1 || !mine ? `${_t('Capture du point {0}', p.name)}` : _t('Point {0} : reprise', p.name));
+    hudStyle(HUDE.domCapF, 'transform', `scaleX(${mv.toFixed(3)})`);
     cls = p.contest ? 'show hot' : mine || p.v === 0 ? 'show' : 'show enemy';
   }
   if (bar.className !== cls) bar.className = cls;
@@ -736,7 +736,7 @@ function survNetApply(m) {
   SURV.hold = clamp(numOr(m.h, 0), 0, SURV.holdMax);
   if (ex && MAPL.root && (!SURV.obj || SURV.obj.position.x !== SURV.x || SURV.obj.position.z !== SURV.z)) survBuild(); // idempotent : reconstruit seulement si le point a bougé (carte en cours de chargement : au prochain envoi)
   if (!ex && SURV.obj) survClear(); // l'état revient au combat : le balisage disparaît
-  if (SURV.round !== SURV.stripR) { SURV.stripR = SURV.round; hudText($('scLim'), _t('Manche {0} · {1} ennemis', SURV.round, survBotCap(SURV.round))); } // un invité rejoint à la manche 3 voit la bonne manche
+  if (SURV.round !== SURV.stripR) { SURV.stripR = SURV.round; hudText(HUDE.scLim, _t('Manche {0} · {1} ennemis', SURV.round, survBotCap(SURV.round))); } // un invité rejoint à la manche 3 voit la bonne manche
 }
 /* Dix secondes tenues : passage vers la carte suivante. La partie se fige le temps du chargement
    (frame ne traite aucun état de jeu en 'loading'), l'écran de chargement la couvre (menuLoading,
