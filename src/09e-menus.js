@@ -442,20 +442,20 @@ function syncSettings() { syncOptions(); }
    niveau, limite, durée, et en ligne la visibilité du salon. Tous les choix sont visibles ; gauche et droite passent au voisin, un clic choisit.
    o = { map, mode, diff, bots (en ligne : 0 ou 1), limit, time, online, edit, pubOk, pub, set(clé, valeur) } ; edit faux : lecture seule (invité d'un salon). */
 function matchRows(o) {
-  const MD = MODES[o.mode] || MODES.tdm, ffa = o.mode === 'ffa', surv = o.mode === 'survival', diffs = DIFF.map((d, i) => [i, d.name]), set = (k) => (v) => o.set(k, v), dis = !o.edit;
+  const MD = MODES[o.mode] || MODES.tdm, ffa = o.mode === 'ffa', surv = o.mode === 'survival', storm = o.mode === 'storm', solo = surv || storm, diffs = DIFF.map((d, i) => [i, d.name]), set = (k) => (v) => o.set(k, v), dis = !o.edit;
   const teams = !o.online ? MD.teams : surv ? _t('Jusqu\u0027à 4 joueurs contre les bots') : ffa ? (o.bots ? _t('Jusqu\u0027à 8 joueurs, complétés par des bots') : _t('Chacun pour soi, joueurs humains seulement'))
     : o.bots ? _t('6 contre 6, complétés par des bots') : _t('Deux équipes, joueurs humains seulement');
-  const rows = []; // la Survie : ni difficulté (une ligne à part, DIFF_SURV), ni limite ni durée (le chrono compte la survie)
+  const rows = []; // la Survie et la Tempête : ni difficulté (une ligne à part, DIFF_SURV), ni limite ni durée (le chrono compte la survie)
   if (dis) rows.push({ k: 'note', text: o.note || _t('Réglés par l\u0027hôte') });
   rows.push(
-    { k: 'seg', full: true, wide: true, key: 'mode', label: _t('Mode'), items: MODE_IDS.filter((id) => id !== 'dom' || MAP_DEFS[o.map].dom).map((id) => [id, MODES[id].btn]), get: () => o.mode, set: set('mode'), disabled: dis },
+    { k: 'seg', full: true, wide: true, key: 'mode', label: _t('Mode'), items: MODE_IDS.filter((id) => (id !== 'dom' || MAP_DEFS[o.map].dom) && (id !== 'storm' || !o.online)).map((id) => [id, MODES[id].btn]), get: () => o.mode, set: set('mode'), disabled: dis },
     { k: 'note', cls: 'hint', text: MD.hint },
     { k: 'info', label: _t('Joueurs'), value: teams });
   if (surv && o.online) rows.push( // les règles de la Survie en ligne, réglées par l'hôte (mode de mort, règle d'extraction)
     { k: 'seg', full: true, key: 'dm', label: _t('Mode de mort'), items: [[0, _t('Sans fin')], [1, _t('Hardcore')]], get: () => o.dm, set: set('dm'), disabled: dis },
     { k: 'seg', full: true, key: 'xr', label: _t('Règle d\u0027extraction'), items: [[0, _t('Un joueur suffit')], [1, _t('Tous les joueurs')]], get: () => o.xr, set: set('xr'), disabled: dis },
     { k: 'note', cls: 'hint', text: _t('Sans fin : les morts réapparaissent à la prochaine extraction. Hardcore : la première mort termine la partie.') });
-  if (!surv) {
+  if (!solo) {
     rows.push({ k: 'seg', full: true, wide: o.online, key: 'bots', label: o.online ? _t('Bots') : _t('Difficulté des bots'), items: o.online ? [['off', _t('Aucun')], ...diffs] : diffs, get: () => (o.online && !o.bots ? 'off' : o.diff), set: set('bots'), disabled: dis });
     if (!o.online || o.bots) rows.push({ k: 'note', cls: 'hint', text: DIFF_HINT[o.diff] });
     rows.push(
@@ -479,7 +479,7 @@ function mapCards(selId, pick) {
 function mapPreview(m, o) {
   const MD = MODES[o.mode] || MODES.tdm, art = m.ok && MAP_ART[m.id], mode = o.mode === 'ffa' ? MD.btn : MD.name;
   return (art ? `<img class="mapart" alt="" decoding="async" src="${art}">` : '<span class="mapart none"></span>')
-    + `<div class="pv-t"><b>${esc(m.name)}</b><span class="pv-m">${esc(mode)}</span><span class="pv-i">${o.mode === 'survival' ? esc(_t('Vous contre tous · sans limite de temps')) : esc(o.limit + ' ' + MD.unit + ' · ' + o.time + ' min')}</span></div>`; // la Survie : ni limite ni durée
+    + `<div class="pv-t"><b>${esc(m.name)}</b><span class="pv-m">${esc(mode)}</span><span class="pv-i">${o.mode === 'survival' || o.mode === 'storm' ? esc(_t('Vous contre tous · sans limite de temps')) : esc(o.limit + ' ' + MD.unit + ' · ' + o.time + ' min')}</span></div>`; // la Survie et la Tempête : ni limite ni durée
 }
 /* Le joueur, en tête de son équipe : son nom (celui du compte) et son niveau */
 function lobbyMe(tags) {
@@ -492,6 +492,9 @@ function soloStage() {
   const me = lobbyMe([]), bot = (n, i) => ({ k: 'player', key: 'b' + i, label: n, bot: true }); // (leur niveau est dans le résumé des paramètres)
   if (Settings.mode === 'survival') { // vous seul, et les bots de la première manche en face (les suivants se rappellent à chaque passage, modeRoster)
     return { head: `<b>${esc(_t('Joueurs'))}</b><span>${esc(MD.teams)}</span>`, cols: [{ cls: 'enemy', head: esc(_t('Vous contre tous')), rows: [me, ...[...BOT_NAMES[0], ...BOT_NAMES[1]].slice(0, survBotCap(1)).map(bot)] }] };
+  }
+  if (Settings.mode === 'storm') { // vous seul, tous les bots d'origine en face (aucun rappel : le tableau se vide et ne se remplit pas, modeRoster)
+    return { head: `<b>${esc(_t('Joueurs'))}</b><span>${esc(MD.teams)}</span>`, cols: [{ cls: 'enemy', head: esc(_t('Vous contre tous')), rows: [me, ...[...BOT_NAMES[0], ...BOT_NAMES[1]].map(bot)] }] };
   }
   if (ffa) {
     const all = [...BOT_NAMES[0], ...BOT_NAMES[1]], idx = all.map((n, i) => i), cut = all.length - FFA_BOTS;

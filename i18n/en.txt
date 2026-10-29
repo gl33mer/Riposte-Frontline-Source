@@ -747,6 +747,16 @@ Score atteint ⇒ Score reached
 Limite d'éliminations atteinte ⇒ Kill limit reached
 Vous avez survécu {0} · {1} éliminations ⇒ You survived {0} · {1} kills
 Éliminé ⇒ Eliminated
+Tempête de sable ⇒ Sandstorm
+Tempête, la zone se referme ⇒ Sandstorm, the zone closes in
+Vous seul, la tempête se referme ⇒ You alone, the sandstorm closes in
+La tempête se referme par étapes. Hors de la zone, le sable vous emporte. Aucune réapparition. Tenez jusqu'au dernier bot. ⇒ The sandstorm closes in stages. Outside the zone the sand takes you. No respawning. Hold out until the last bot.
+Bots restants ⇒ Bots left
+Tempête {0}/{1} ⇒ Sandstorm {0}/{1}
+La tempête se referme ({0}/{1}) ⇒ The sandstorm closes in ({0}/{1})
+Vous avez survécu à la tempête · {0} éliminations ⇒ You survived the sandstorm · {0} kills
+Tempête passée ⇒ Sandstorm passed
+Pris par la tempête ⇒ Caught by the sandstorm
 
 # 09n-armurerie.js
 Classe personnalisée {0} sur {1}. Choisissez trois séries, qui ne se débloquent pas au même nombre d'éliminations ⇒ Custom class {0} of {1}. Pick three killstreaks, each unlocked at a different number of kills

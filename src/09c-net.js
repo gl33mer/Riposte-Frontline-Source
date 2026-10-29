@@ -788,7 +788,7 @@ function netClientMsg(m) {
 function netPhase(ph) { return ph === 'playing' || ph === 'loading' ? ph : 'lobby'; }
 function netCfg(c) {
   c = c || {};
-  const map = mapById(c.map).id, mode = MODE_IDS.includes(c.mode) && (c.mode !== 'dom' || MAP_DEFS[map].dom) ? c.mode : 'tdm'; // la domination demande une carte à points
+  const map = mapById(c.map).id, mode = MODE_IDS.includes(c.mode) && c.mode !== 'storm' && (c.mode !== 'dom' || MAP_DEFS[map].dom) ? c.mode : 'tdm'; // la domination demande une carte à points ; la Tempête est solo (aucun salon ne peut la choisir)
   const L = MODES[mode].limits, limit = L ? (L.includes(+c.limit) ? +c.limit : L[1]) : 0; // la Survie n'a ni limite (limits null) ni durée : la mort du dernier joueur seul décide
   const time = [5, 10, 15].includes(+c.time) ? +c.time : 10;
   const diff = [0, 1, 2].includes(+c.diff) ? +c.diff : 2;
