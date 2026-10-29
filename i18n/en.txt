@@ -750,7 +750,13 @@ Vous avez survécu {0} · {1} éliminations ⇒ You survived {0} · {1} kills
 Tempête de sable ⇒ Sandstorm
 Tempête, la zone se referme ⇒ Sandstorm, the zone closes in
 Vous seul, la tempête se referme ⇒ You alone, the sandstorm closes in
-La tempête se referme par étapes. Hors de la zone, le sable vous emporte. Aucune réapparition. Tenez jusqu'au dernier bot. ⇒ The sandstorm closes in stages. Outside the zone the sand takes you. No respawning. Hold out until the last bot.
+La tempête se referme par étapes. Hors de la zone, le sable vous emporte. Aucune réapparition, et personne n'est votre allié. Tenez jusqu'au dernier bot. ⇒ The sandstorm closes in stages. Outside the zone the sand takes you. No respawning, and nobody is your ally. Hold out until the last bot.
+Nombre de bots ⇒ Number of bots
+Butin au sol ⇒ Ground loot
+Durée de la tempête ⇒ Sandstorm duration
+Durée d'une étape ⇒ Stage duration
++1 {0} ⇒ +1 {0}
++{0} munitions ⇒ +{0} munitions
 Bots restants ⇒ Bots left
 Tempête {0}/{1} ⇒ Sandstorm {0}/{1}
 La tempête se referme ({0}/{1}) ⇒ The sandstorm closes in ({0}/{1})

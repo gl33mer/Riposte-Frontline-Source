@@ -455,6 +455,12 @@ function matchRows(o) {
     { k: 'seg', full: true, key: 'dm', label: _t('Mode de mort'), items: [[0, _t('Sans fin')], [1, _t('Hardcore')]], get: () => o.dm, set: set('dm'), disabled: dis },
     { k: 'seg', full: true, key: 'xr', label: _t('Règle d\u0027extraction'), items: [[0, _t('Un joueur suffit')], [1, _t('Tous les joueurs')]], get: () => o.xr, set: set('xr'), disabled: dis },
     { k: 'note', cls: 'hint', text: _t('Sans fin : les morts réapparaissent à la prochaine extraction. Hardcore : la première mort termine la partie.') });
+  if (storm) rows.push( // la Tempête : difficulté, nombre de bots, butin au sol, durée de la tempête et durée d'une étape
+    { k: 'seg', full: true, key: 'bots', label: _t('Difficulté des bots'), items: diffs, get: () => o.diff, set: set('bots'), disabled: dis },
+    { k: 'range', key: 'stormBots', label: _t('Nombre de bots'), min: 1, max: 30, step: 1, get: () => o.stormBots, set: set('stormBots'), fmt: (v) => String(Math.round(v)), disabled: dis },
+    { k: 'check', key: 'stormLoot', label: _t('Butin au sol'), get: () => !!o.stormLoot, set: set('stormLoot'), disabled: dis },
+    { k: 'seg', full: true, key: 'stormMin', label: _t('Durée de la tempête'), items: [5, 10, 15, 20, 30].map((v) => [v, v + ' min']), get: () => o.stormMin, set: set('stormMin'), disabled: dis },
+    { k: 'range', key: 'stormStage', label: _t('Durée d\u0027une étape'), min: 15, max: 120, step: 5, get: () => o.stormStage, set: set('stormStage'), fmt: (v) => _t('{0} s', Math.round(v)), disabled: dis });
   if (!solo) {
     rows.push({ k: 'seg', full: true, wide: o.online, key: 'bots', label: o.online ? _t('Bots') : _t('Difficulté des bots'), items: o.online ? [['off', _t('Aucun')], ...diffs] : diffs, get: () => (o.online && !o.bots ? 'off' : o.diff), set: set('bots'), disabled: dis });
     if (!o.online || o.bots) rows.push({ k: 'note', cls: 'hint', text: DIFF_HINT[o.diff] });
@@ -493,8 +499,10 @@ function soloStage() {
   if (Settings.mode === 'survival') { // vous seul, et les bots de la première manche en face (les suivants se rappellent à chaque passage, modeRoster)
     return { head: `<b>${esc(_t('Joueurs'))}</b><span>${esc(MD.teams)}</span>`, cols: [{ cls: 'enemy', head: esc(_t('Vous contre tous')), rows: [me, ...[...BOT_NAMES[0], ...BOT_NAMES[1]].slice(0, survBotCap(1)).map(bot)] }] };
   }
-  if (Settings.mode === 'storm') { // vous seul, tous les bots d'origine en face (aucun rappel : le tableau se vide et ne se remplit pas, modeRoster)
-    return { head: `<b>${esc(_t('Joueurs'))}</b><span>${esc(MD.teams)}</span>`, cols: [{ cls: 'enemy', head: esc(_t('Vous contre tous')), rows: [me, ...[...BOT_NAMES[0], ...BOT_NAMES[1]].map(bot)] }] };
+  if (Settings.mode === 'storm') { // vous seul, les bots demandés en face (la réserve s'ajoute au-delà de onze, modeRoster)
+    const n = clamp(Math.round(Settings.stormBots), 1, STORM_BOTS_MAX);
+    const names = [...BOT_NAMES[0], ...BOT_NAMES[1], ...BOT_RESERVE_NAMES].slice(0, n);
+    return { head: `<b>${esc(_t('Joueurs'))}</b><span>${esc(MD.teams)}</span>`, cols: [{ cls: 'enemy', head: esc(_t('Vous contre tous')), rows: [me, ...names.map(bot)] }] };
   }
   if (ffa) {
     const all = [...BOT_NAMES[0], ...BOT_NAMES[1]], idx = all.map((n, i) => i), cut = all.length - FFA_BOTS;
@@ -507,10 +515,13 @@ function soloStage() {
   ] };
 }
 function soloSet(k, v) {
-  if (k === 'mode') Settings.mode = v; else if (k === 'bots') Settings.difficulty = v; else if (k === 'limit') Settings[MODES[Settings.mode].key] = v; else Settings.minutes = v;
+  if (k === 'mode') Settings.mode = v; else if (k === 'bots') Settings.difficulty = v; else if (k === 'limit') Settings[MODES[Settings.mode].key] = v;
+  else if (k === 'stormBots') Settings.stormBots = v; else if (k === 'stormLoot') Settings.stormLoot = v;
+  else if (k === 'stormMin') Settings.stormMin = v; else if (k === 'stormStage') Settings.stormStage = v;
+  else Settings.minutes = v;
   saveSettings();
 }
-function soloCfg() { const MD = MODES[Settings.mode] || MODES.tdm; return { map: Settings.map, mode: Settings.mode, diff: Settings.difficulty, limit: Settings[MD.key], time: Settings.minutes, online: false, edit: true, set: soloSet }; }
+function soloCfg() { const MD = MODES[Settings.mode] || MODES.tdm; return { map: Settings.map, mode: Settings.mode, diff: Settings.difficulty, limit: Settings[MD.key], time: Settings.minutes, online: false, edit: true, set: soloSet, stormBots: Settings.stormBots, stormLoot: Settings.stormLoot, stormMin: Settings.stormMin, stormStage: Settings.stormStage }; }
 const SOLO_PAGES = {
   solo: () => {
     const m = mapById(Settings.map);
