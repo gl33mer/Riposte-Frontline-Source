@@ -651,7 +651,7 @@ function netRebalanceBots() {
   const ffa = NET.cfg.mode === 'ffa', surv = NET.cfg.mode === 'survival'; // chacun pour soi : un seul groupe, complété jusqu'à NET_MAX joueurs ; Survie : les joueurs chez Alpha, les bots rappelés chez Bravo au fil des manches (survBotCap)
   for (const t of ffa ? [-1] : [0, 1]) {
     const want = surv ? (t === 1 ? survBotCap(SURV.round) : 0) : !NET.cfg.bots ? 0 : ffa ? Math.max(0, NET_MAX - hum[0] - hum[1]) : Math.max(0, NET_TEAM - hum[t]);
-    const pool = entities.filter((e) => !e.isPlayer && !e.isRemote && (ffa || e.team === t));
+    const pool = entities.filter((e) => !e.isPlayer && !e.isRemote && !e.reserve && (ffa || e.team === t)); // la réserve de la Tempête ne participe pas aux salons
     let active = pool.filter((b) => b.netBot);
     while (active.length > want) { const b = active.find((x) => !x.alive) || active[active.length - 1]; netBotOff(b); active = active.filter((x) => x !== b); }
     for (const b of pool) { if (active.length >= want) break; if (!b.netBot) { netBotOn(b); active.push(b); } }
@@ -730,7 +730,7 @@ function netOldConnClose() { const c = NET.oldConn; NET.oldConn = null; if (c) {
 /* Les bots de l'ancien hôte (distants chez moi) deviennent les miens : un bot de ma réserve de la même équipe prend leur identifiant, leur
    nom, leurs compteurs et leur place ; la numérotation de leurs événements continue (les autres ignorent un numéro déjà vu) */
 function netAdoptBots() {
-  const pool = entities.filter((e) => !e.isPlayer && !e.isRemote && !e.netBot), ffa = MATCH.mode === 'ffa';
+  const pool = entities.filter((e) => !e.isPlayer && !e.isRemote && !e.netBot && !e.reserve), ffa = MATCH.mode === 'ffa';
   for (const r of [...NET.remotes.values()].filter((e) => e.remoteBot)) {
     const b = pool.find((x) => ffa || x.team === r.team), id = r.peer, seq = NET.seen.get(id) || 0, was = { alive: r.alive, pos: r.pos.clone(), yaw: r.yaw };
     netHeliDrop(r); netRemoveById(id, true);

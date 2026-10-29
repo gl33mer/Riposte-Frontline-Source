@@ -27,7 +27,7 @@ function giveLoadout() {
   classFix(); // la classe choisie existe toujours (06r-arsenal.js)
   const C = CLASSES[PL.classIdx = Settings.loadout];
   PL.ent.arms = makeArms(classWeapons(PL.classIdx));
-  PL.ksSel = ESSAI ? essaiKs() : MATCH.mode === 'survival' ? [] : classKs(PL.classIdx); updateStreakHud(); // séries de la classe ; celles déjà prêtes d'une autre classe attendent qu'on la reprenne ; en Survie, aucune (ni hélicoptère ni mecha : les séries seules les déploient)
+  PL.ksSel = ESSAI ? essaiKs() : MATCH.mode === 'survival' || MATCH.mode === 'storm' ? [] : classKs(PL.classIdx); updateStreakHud(); // séries de la classe ; celles déjà prêtes d'une autre classe attendent qu'on la reprenne ; en Survie et en Tempête, aucune (ni hélicoptère ni mecha : les séries seules les déploient)
   PL.nades = C.nades; PL.nadeType = NADE_TYPES[C.nade] ? C.nade : 'frag'; PL.flashT = 0; PL.knifeT = 0; PL.nadeState = null; PL.knifeOut = false; PL.knifeHold = 0; PL.knifeBtn = null;
   vmSetLook(skinOf(PL.ent), 0); vmEquip(PL.weapons[0].def); VM.action = null;
   if (MATCH.state === 'paused') { PL.pendingDraw = true; VM.lower = 1; VM.lowerTarget = 1; return; } // changement de classe dans la pause : l'arme sort à la reprise (resumeGame)

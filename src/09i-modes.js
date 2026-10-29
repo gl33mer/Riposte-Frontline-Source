@@ -30,14 +30,14 @@ const MODES = {
     hint: _t('Vous seul contre tous. Le chrono compte votre survie et les bots réapparaissent sans fin. Tenez le plus longtemps possible.') },
   storm: { name: _t('Tempête de sable'), btn: _t('Tempête de sable'), sub: _t('Tempête, la zone se referme'), teams: _t('Vous seul, la tempête se referme'),
     lim: _t('Sans limite'), unit: _t('éliminations'), limits: null, key: null, respawn: Infinity, botRespawn: 1e6, prot: 2, // botRespawn 1e6 : aucune réapparition, mais les corps restent au sol (Infinity les ferait disparaître, 06b-soldier.js)
-    hint: _t('La tempête se referme par étapes. Hors de la zone, le sable vous emporte. Aucune réapparition. Tenez jusqu\u0027au dernier bot.') },
+    hint: _t('La tempête se referme par étapes. Hors de la zone, le sable vous emporte. Aucune réapparition, et personne n\u0027est votre allié. Tenez jusqu\u0027au dernier bot.') },
 };
 const MODE_IDS = ['tdm', 'ffa', 'dom', 'survival', 'storm'];
 function modeDef() { return MODES[MATCH.mode] || MODES.tdm; }
-/* Alliés : même équipe, sauf en match à mort où chacun joue pour soi */
-function allied(a, b) { return a === b || (MATCH.mode !== 'ffa' && a.team === b.team); }
+/* Alliés : même équipe, sauf en match à mort et en Tempête où chacun joue pour soi (bataille royale : les bots s'affrontent aussi) */
+function allied(a, b) { return a === b || (MATCH.mode !== 'ffa' && MATCH.mode !== 'storm' && a.team === b.team); }
 /* Un bruit (tir, explosion) est-il celui d'un adversaire de b ? */
-function soundFoe(s, b) { return MATCH.mode === 'ffa' ? s.who !== b : s.team !== b.team; }
+function soundFoe(s, b) { return MATCH.mode === 'ffa' || MATCH.mode === 'storm' ? s.who !== b : s.team !== b.team; }
 /* Classement du match à mort : éliminations, puis moins de morts, puis score */
 const ffaCmp = (a, b) => b.kills - a.kills || a.deaths - b.deaths || b.score - a.score;
 
@@ -47,6 +47,7 @@ function modeStart(mode) {
   SPAWN_LOG.length = 0; DEATH_LOG.length = 0; SPAWN_TRAP.length = 0; OPEN.on = true; // départ : chacun sa place (spawnOpening), jusqu'au « En avant ! »
   for (const e of entities) { e.protT = 0; e.lastDeath = null; e.caps = 0; }
   ringReset(); // l'anneau de la carte est remis à neuf à chaque partie (une tempête l'a laissé rétréci : la carte reste chargée entre deux parties)
+  if (MATCH.mode === 'storm') stormPrepare(); // le nombre de bots demandé existe (la réserve se crée ici), avant que modeRoster ne les mette en jeu
   squadReset();
   if (MATCH.mode === 'survival') survStart(); // avant modeRoster : la manche compte les bots rappelés (survBotCap)
   modeRoster();
@@ -68,14 +69,16 @@ function modeStart(mode) {
    Survie : survBotCap(SURV.round) bots en jeu (quatre à la manche 1, un de plus à chaque manche), les autres en attente (off),
    tous chez Bravo, tous vus en ennemis. Tempête : tous les bots d'origine en jeu, tous chez Bravo, tous vus en ennemis. */
 function modeRoster() {
-  const ffa = MATCH.mode === 'ffa', bots = entities.filter((e) => !e.isPlayer), cut = MATCH.online ? 0 : bots.length - FFA_BOTS; // en ligne, l'hôte active les bots (netRebalanceBots)
-  const surv = MATCH.mode === 'survival'; // la Survie : survBotCap(SURV.round) bots en jeu, les autres attendent leur manche (off)
-  const foe = surv || MATCH.mode === 'storm', cap = surv ? survBotCap(SURV.round) : 0; // la Tempête : tous les bots en jeu, tous chez Bravo (comme la Survie, sans rappel)
+  const storm = MATCH.mode === 'storm', ffa = MATCH.mode === 'ffa', surv = MATCH.mode === 'survival';
+  const all = entities.filter((e) => !e.isPlayer), base = all.filter((e) => !e.reserve); // bots d'origine, hors réserve (la Tempête seule s'en sert)
+  const cut = MATCH.online ? 0 : base.length - FFA_BOTS; // en ligne, l'hôte active les bots (netRebalanceBots)
+  const foe = surv || storm, cap = surv ? survBotCap(SURV.round) : 0; // la Tempête : tous chez Bravo (sans importance : personne n'est allié)
   // on retire des bots répartis sur les deux camps d'origine (un sur trois, puis les derniers)
-  const off = new Set(ffa && cut > 0 ? bots.filter((e, i) => i % 3 === 1).concat(bots.slice().reverse()).filter((e, i, a) => a.indexOf(e) === i).slice(0, cut) : []);
-  for (let i = 0; i < bots.length; i++) {
-    const e = bots[i];
-    e.off = surv ? i >= cap : off.has(e); // la Survie rappelle les bots dans l'ordre : quatre, puis un de plus à chaque manche
+  const off = new Set(ffa && cut > 0 ? base.filter((e, i) => i % 3 === 1).concat(base.slice().reverse()).filter((e, i, a) => a.indexOf(e) === i).slice(0, cut) : []);
+  for (let i = 0; i < all.length; i++) {
+    const e = all[i];
+    // Tempête : exactement STORM.bots en jeu ; ailleurs, la réserve reste hors jeu, la Survie rappelle dans l'ordre, le chacun pour soi coupe
+    e.off = storm ? i >= STORM.bots : e.reserve ? true : surv ? i >= cap : off.has(e);
     e.team = foe ? 1 : e.team0; // la Survie et la Tempête mettent tous les bots chez Bravo ; sinon, l'équipe d'origine se reconstitue à chaque partie (team0, 07-bots.js)
     if (e.off) { e.alive = false; e.respawnT = Infinity; e.target = null; e.model.rag = null; e.model.root.visible = false; }
     soldierLook(e.model, skinOf(e), skinRel(e));
@@ -162,16 +165,16 @@ function domSide(team) {
 /* Rang de départ d'un soldat dans son groupe (son camp, ou tous chacun pour soi). En solo : le joueur, puis les bots dans l'ordre. En ligne :
    les joueurs du groupe triés par identifiant (chacun calcule le même ordre chez lui, d'après l'état du salon), puis les bots de l'hôte. */
 function openRank(e) {
-  const mine = (o) => MATCH.mode === 'ffa' || o.team === e.team;
+  const mine = (o) => MATCH.mode === 'ffa' || MATCH.mode === 'storm' || o.team === e.team;
   if (!MATCH.online) return entities.filter((o) => !o.off && !o.isRemote && mine(o)).sort((a, b) => b.isPlayer - a.isPlayer).indexOf(e);
-  const hum = [...NET.players.values()].filter((p) => p.ig && (MATCH.mode === 'ffa' || p.t === e.team)).map((p) => p.id).sort();
+  const hum = [...NET.players.values()].filter((p) => p.ig && (MATCH.mode === 'ffa' || MATCH.mode === 'storm' || p.t === e.team)).map((p) => p.id).sort();
   if (e.isPlayer) { const i = hum.indexOf(NET.me); return i < 0 ? hum.length : i; }
   return hum.length + entities.filter((o) => o.netBot && mine(o)).indexOf(e);
 }
 /* Places de départ du groupe d'un soldat. En équipe : celles de sa base, du centre de la base vers ses bords (les deux bases étant en
    miroir, les deux camps ont la même formation) */
 function openSlots(e) {
-  if (MATCH.mode === 'ffa') { if (OPEN.key !== CURMAP.id) { OPEN.key = CURMAP.id; OPEN.ffa = ffaSlots(); } return OPEN.ffa; }
+  if (MATCH.mode === 'ffa' || MATCH.mode === 'storm') { if (OPEN.key !== CURMAP.id) { OPEN.key = CURMAP.id; OPEN.ffa = ffaSlots(); } return OPEN.ffa; }
   const S = SPAWNS[spawnBase(e.team)], [cx, cz] = spawnMid(S);
   return S.map((s, i) => [s, i, hyp(s[0] - cx, s[1] - cz)]).sort((a, b) => a[2] - b[2] || a[1] - b[1]).map((a) => a[0]);
 }
@@ -207,7 +210,7 @@ function spawnOpening(e) {
 /* ---------- Réapparition ---------- */
 /* Candidats du mode, [x, z] ; wide : rien de sûr dans les candidats habituels, toute la carte s'ouvre (bascule) */
 function spawnPool(e, wide) {
-  if (MATCH.mode === 'ffa') return SPAWNS[0].concat(SPAWNS[1], spawnField());
+  if (MATCH.mode === 'ffa' || MATCH.mode === 'storm') return SPAWNS[0].concat(SPAWNS[1], spawnField());
   const t = spawnBase(e.team), home = SPAWNS[t];
   if (wide) return home.concat(spawnField(), SPAWNS[1 - t]);
   if (MATCH.mode === 'tdm' || MATCH.mode === 'survival') { const side = Math.sign(spawnMid(home)[1]); return home.concat(spawnField().filter((p) => p[1] * side > 6)); } // sa moitié de carte (la Survie : le joueur aussi, il n'a pas d'alliés à rejoindre)
@@ -217,7 +220,7 @@ function spawnPool(e, wide) {
 function spawnCtx(e) {
   const foes = [], pals = [];
   for (const o of entities) if (o !== e && o.alive && !o.off) (allied(o, e) ? pals : foes).push(o);
-  return { foes, pals, front: MATCH.mode === 'ffa' ? null : spawnFront(e, foes, pals) };
+  return { foes, pals, front: MATCH.mode === 'ffa' || MATCH.mode === 'storm' ? null : spawnFront(e, foes, pals) };
 }
 /* Le front : la ligne à mi-chemin entre le milieu des adversaires en vie et celui des alliés (à défaut, leur base), normale (dx, dz)
    tournée vers son camp. (x - F.x) * F.dx + (z - F.z) * F.dz > 0 : de son côté. L'adversaire qui avance dans la base fait passer
@@ -231,7 +234,7 @@ function spawnFront(e, foes, pals) {
 }
 /* Note d'un candidat, et s'il est sûr (hors ligne de vue, vue à part : spawnSeen, plus coûteuse, ne se calcule que pour les mieux notés) */
 function spawnRate(e, C, x, z) {
-  const now = MATCH.time, ffa = MATCH.mode === 'ffa';
+  const now = MATCH.time, ffa = MATCH.mode === 'ffa' || MATCH.mode === 'storm';
   let md = 999, near = 0, look = 0, crowd = 0, pal = 0, safe = true;
   for (const o of C.foes) {
     const dx = x - o.pos.x, dz = z - o.pos.z, d = hyp(dx, dz);
@@ -807,18 +810,19 @@ function survClear() {
 }
 
 /* ==========================================================================
-   TEMPÊTE : LA ZONE QUI SE REFERME
-   Solo seulement (les bots font tous le camp adverse, comme en Survie). La zone ronde de la carte
-   (RING, 02-relief.js), celle qui tue hors du cercle, se referme par étapes : toutes les STORM.tStage
-   secondes, le rayon diminue (et la grâce avec lui) ; hors de la zone, la mort est la règle commune
-   (ringCheck → zoneDeath, la cause « Désert », créditée au dernier tireur). Aucune réapparition :
-   le tableau se vide tout seul. La partie s'arrête à la mort du joueur (killEnt) ou quand le dernier
-   bot hostile tombe (stormUpdate). Sur une carte sans anneau (toutes sauf Simoun), un anneau est
-   synthétisé au centre de la carte, assez large pour contenir les deux bases.
+   TEMPÊTE (bataille royale, solo seulement)
+   La zone ronde de la carte (RING, 02-relief.js) se referme par étapes : toutes les STORM.tStage
+   secondes le rayon diminue (et la grâce avec lui) ; hors de la zone, on meurt (ringCheck → zoneDeath,
+   la cause « Désert », créditée au dernier tireur). Personne ne réapparaît et, façon chacun pour soi,
+   les bots s'affrontent aussi entre eux : le dernier debout l'emporte. Les bots tiennent les couverts
+   (plus posés qu'en match à mort : agressivité réduite, longues tenues) et se replient vers le centre
+   quand la zone va se refermer (stormGoal). Paramètres (menu Solo) : nombre de bots (1 à 30, réserve
+   créée à la demande), butin au sol, difficulté, durée de la tempête et durée d'une étape.
    ========================================================================== */
-const STORM = { r0: 0, rMin: 0, stage: 1, stages: 6, tStage: 45, t: 45, dropMax: 0, loot: [], started: false };
-const STORM_LOOT = ['ak47', 'mp5', 'm1014', 'l96', 'scarh', 'ump45']; // armes semées au départ, une famille pour chaque (l'ordre impose la variété)
-const STORM_LOOT_N = 6;
+const STORM = { r0: 0, rMin: 0, stage: 1, stages: 6, tStage: 45, t: 45, bots: 11, dropMax: 0, loot: [], items: [], started: false };
+const STORM_BOTS_MAX = 30; // au-delà des onze bots d'origine, la réserve se crée au premier besoin (makeBotReserve)
+const STORM_NADE_N = 4, STORM_AMMO_N = 3; // grenades et caisses de munitions semées avec le butin
+const STORM_GUNS = Object.keys(WEAPONS).filter((id) => WEAPONS[id].cat); // toutes les armes à feu (le pistolet compris) : tirage au sort
 const _stV = new V3(), _stQ = new THREE.Quaternion(), _stV2 = new V3();
 /* L'anneau de la carte, remis à neuf : celui de la définition (reliefBuild l'a posé une fois, à la construction), ou aucun. Appelé à chaque
    partie : une carte reste chargée entre deux parties (MAPL_KEEP), sans quoi une Tempête suivie d'un Rejouer laisserait l'anneau rétréci. */
@@ -828,12 +832,18 @@ function ringReset() {
   RING.x = R ? numOr(R.x, 0) : 0; RING.z = R ? numOr(R.z, 0) : 0;
   RING.r = R ? numOr(R.r, 1e9) : 1e9; RING.hard = R ? numOr(R.hard, RING.r + 10) : 1e9; RING.t = R ? numOr(R.t, 10) : 10;
 }
+/* Le nombre de bots demandé existe (réserve comprise) : appelé par modeStart avant modeRoster. */
+function stormPrepare() {
+  STORM.bots = clamp(Math.round(numOr(Settings.stormBots, 11)), 1, STORM_BOTS_MAX);
+  let have = 0; for (const e of entities) if (!e.isPlayer && !e.isRemote) have++;
+  while (have < STORM.bots) { makeBotReserve(); have++; }
+}
 /* Rayon et grâce d'une étape : l'étape 1 est l'anneau plein, la dernière (stages) le plus serré. Le rétrécissement accélère un peu vers la fin. */
-const stormRadius = () => lerp(STORM.r0, STORM.rMin, Math.pow((STORM.stage - 1) / (STORM.stages - 1), 1.15));
-const stormGrace = () => lerp(10, 4, (STORM.stage - 1) / (STORM.stages - 1)); // la zone est de plus en plus mortelle
+const stormRadius = () => lerp(STORM.r0, STORM.rMin, Math.pow((STORM.stage - 1) / Math.max(1, STORM.stages - 1), 1.15));
+const stormGrace = () => lerp(10, 4, (STORM.stage - 1) / Math.max(1, STORM.stages - 1)); // la zone est de plus en plus mortelle
 /* Pose le rayon courant sur la zone ronde, en gardant hard devant r : on peut sortir (voile et compte à rebours) mais pas fuir. */
 function stormApply() { RING.r = stormRadius(); RING.hard = RING.r + 10; RING.t = stormGrace(); }
-/* Début de Tempête (modeStart, la carte est chargée) : centre et rayon de départ, rayon minimal, anneau forcé, butin semé. */
+/* Début de Tempête (modeStart, la carte est chargée) : centre et rayon de départ, étapes et grâces d'après les réglages, butin semé. */
 function stormInit() {
   const R = CURMAP.def && CURMAP.def.ring;
   let x, z, r0;
@@ -844,42 +854,121 @@ function stormInit() {
     for (const t of [0, 1]) for (const s of SPAWNS[t]) r0 = Math.max(r0, hyp(s[0] - x, s[1] - z) + 5); // les bases entières tiennent au départ
   }
   STORM.r0 = r0; STORM.rMin = Math.max(9, r0 * 0.18);
-  STORM.stage = 1; STORM.stages = 6; STORM.tStage = 45; STORM.t = STORM.tStage; STORM.started = true;
+  STORM.tStage = clamp(Math.round(numOr(Settings.stormStage, 45)), 10, 180);
+  STORM.stages = Math.max(1, Math.round((clamp(numOr(Settings.stormMin, 15), 2, 40) * 60) / STORM.tStage)); // la tempête se referme en STORM.stages étapes
+  STORM.stage = 1; STORM.t = STORM.tStage; STORM.started = true;
   RING.on = true; RING.x = x; RING.z = z; stormApply();
-  if (!STORM.dropMax) STORM.dropMax = DROP.max; // la durée de vie des armes semées passe par d.life, mais il faut aussi de la place (DROP.max)
-  DROP.max = Math.max(DROP.max, STORM_LOOT_N + 16); // assez de place pour le butin et les armes des morts
+  if (!STORM.dropMax) STORM.dropMax = DROP.max; // la durée de vie du butin passe par d.life, mais il faut aussi de la place (DROP.max)
+  DROP.max = Math.max(DROP.max, STORM.bots + STORM_NADE_N + STORM_AMMO_N + 12); // le butin, les caisses et les armes des morts
   STORM.loot.length = 0; // une partie précédente sur la même carte (Rejouer) : ses armes ont déjà été retirées par clearDrops
+  stormClearItems();
   stormLoot();
 }
-/* Sème des armes à des points praticables, dans la zone de départ et assez espacés : le joueur les ramasse en marchant dessus (08c-pickups.js),
-   exactement comme les armes des soldats tombés. Les bots, eux, ne ramassent pas (limite assumée de la v1). */
-function stormLoot() {
+/* Points praticables tirés au hasard dans la zone de départ, assez espacés : socle commun du butin et des objets. */
+function stormSpots(n, gap) {
   const base = SPAWNS[0].concat(SPAWNS[1], spawnField()), cand = [];
-  for (const p of base) if (hyp(p[0] - RING.x, p[1] - RING.z) <= STORM.r0 - 8) cand.push(p);
+  const lim = Math.max(4, STORM.r0 - 8);
+  for (const p of base) if (hyp(p[0] - RING.x, p[1] - RING.z) <= lim) cand.push(p);
   for (let i = cand.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0, t = cand[i]; cand[i] = cand[j]; cand[j] = t; } // mélange
-  const pick = [];
+  const out = [];
   for (const p of cand) {
-    if (pick.length >= STORM_LOOT_N) break;
+    if (out.length >= n) break;
     let ok = true;
-    for (const q of pick) if (hyp(p[0] - q[0], p[1] - q[1]) < 18) { ok = false; break; }
-    if (ok) pick.push(p);
+    for (const q of out) if (hyp(p[0] - q[0], p[1] - q[1]) < gap) { ok = false; break; }
+    if (ok) out.push(p);
   }
-  for (let i = 0; i < pick.length; i++) {
-    const p = pick[i], def = WEAPONS[STORM_LOOT[i % STORM_LOOT.length]];
+  return out;
+}
+/* Butin au sol (réglage « Butin au sol ») : des armes tirées dans toute la table, des caisses de munitions et des grenades. Le joueur
+   ramasse les armes en marchant dessus (08c-pickups.js) ou en s'en approchant ; munitions et grenades se prennent au passage. */
+function stormLoot() {
+  if (!Settings.stormLoot) return;
+  const guns = clamp(Math.round(STORM.bots * 0.6), 4, 14);
+  for (const p of stormSpots(guns, 16)) {
+    const def = WEAPONS[STORM_GUNS[(Math.random() * STORM_GUNS.length) | 0]];
     if (!def) continue;
     _stV.set(p[0], gy0(p[0], p[1]) + 1.4, p[1]); _stQ.setFromAxisAngle(UP, rand(0, TAU)); _stV2.set(rand(-0.4, 0.4), 0.4, rand(-0.4, 0.4));
-    const d = dropWeapon(def, def.mag, Math.round(def.reserve * 0.5), _stV, _stQ, _stV2);
+    const d = dropWeapon(def, def.mag, Math.round(def.reserve * rand(0.4, 0.8)), _stV, _stQ, _stV2);
     if (d) { d.life = 1e9; STORM.loot.push(d); } // elles restent toute la partie (stepDrop lit la durée propre à un objet, 08c-pickups.js)
   }
+  const spots = stormSpots(STORM_NADE_N + STORM_AMMO_N, 9);
+  for (let i = 0; i < spots.length; i++) stormItemDrop(i < STORM_NADE_N ? 'nade' : 'ammo', spots[i][0], spots[i][1]);
 }
-/* Nombre de bots hostiles en vie (le joueur est seul, tous les autres sont ennemis). */
+/* Objets au sol (grenades, caisses de munitions) : un petit maillage réutilisant la grenade et ses matières, bercé sur place, ramassé au passage. */
+const STORM_BOX_GEO = new THREE.BoxGeometry(0.34, 0.2, 0.46);
+function stormItemDrop(kind, x, z) {
+  if (!NADE_MAT) nadeWarm();
+  const obj = new THREE.Group();
+  if (kind === 'nade') {
+    const type = pick(['frag', 'frag', 'smoke', 'flash']);
+    const body = new THREE.Mesh(NADE_GEO, NADE_MAT); body.scale.set(0.032, 0.037, 0.032); body.castShadow = true; obj.add(body);
+    const top = new THREE.Mesh(NADE_TOP, NADE_METAL); top.position.y = 0.043; top.castShadow = true; obj.add(top);
+    obj.scale.setScalar(1.7); obj.userData.type = type;
+  } else {
+    const body = new THREE.Mesh(STORM_BOX_GEO, NADE_METAL); body.castShadow = true; obj.add(body);
+    obj.scale.setScalar(1.1);
+  }
+  const y = gy0(x, z) + 1.1;
+  obj.position.set(x, y, z);
+  scene.add(obj);
+  STORM.items.push({ kind, type: obj.userData.type || 'frag', obj, y, t: 0, ph: rand(0, TAU) });
+}
+function removeStormItem(i) { const it = STORM.items[i]; if (it.obj.parent) it.obj.parent.remove(it.obj); STORM.items.splice(i, 1); }
+function stormClearItems() { for (const it of STORM.items) if (it.obj.parent) it.obj.parent.remove(it.obj); STORM.items.length = 0; }
+/* Objets au sol : bercement, puis ramassage au passage (le réticule n'en a pas besoin : ils se prennent tout seuls). */
+function stormItemsUpdate(dt) {
+  const P = PL.ent;
+  for (let i = STORM.items.length - 1; i >= 0; i--) {
+    const it = STORM.items[i], o = it.obj;
+    it.t += dt; o.position.y = it.y + Math.sin(it.t * 2 + it.ph) * 0.08; o.rotation.y += dt * 1.3;
+    if (!P.alive || MATCH.state !== 'playing') continue;
+    if (Math.abs(o.position.x - P.pos.x) > 1.9 || Math.abs(o.position.z - P.pos.z) > 1.9 || Math.abs(o.position.y - P.pos.y) > 1.9) continue;
+    let taken = false;
+    if (it.kind === 'nade') {
+      const max = ((CLASSES[PL.classIdx] || {}).nades || NADE_COUNT) + 2;
+      if (PL.nades < max) { PL.nades++; DROP.msg = _t('+1 {0}', NADE_TYPES[it.type].name); taken = true; }
+    } else {
+      let add = 0; for (const s of P.arms.slots) { const need = s.def.reserve - s.reserve; if (need > 0) { s.reserve += need; add += need; } }
+      if (add > 0) { DROP.msg = _t('+{0} munitions', add); taken = true; }
+    }
+    if (taken) { DROP.msgT = 1.4; sfxMech('pickup'); removeStormItem(i); }
+  }
+}
+/* Objectif de croisière d'un bot en Tempête : se replier vers le centre quand la zone va se refermer (ou qu'on est près du bord),
+   sinon s'installer à couvert et tenir un moment. Rendu null : l'appelant retombe sur les points d'intérêt habituels. */
+function stormGoal(b) {
+  const cx = RING.x, cz = RING.z, d = hyp(b.pos.x - cx, b.pos.z - cz);
+  if (STORM.t <= 8 || d > Math.max(5, RING.r - 12)) { // repli : on ne se fait pas prendre par la zone
+    const a = rand(0, TAU), r = Math.random() * Math.max(5, RING.r * 0.5);
+    const g = stormSpot(cx + Math.cos(a) * r, cz + Math.sin(a) * r);
+    if (g) { g.hold = true; g.holdFor = rand(6, 14); return g; }
+  }
+  if (Math.random() < 0.55) { // s'installer à couvert, comme dans une maison, et tenir longtemps
+    const list = coverNear(b.pos.x, b.pos.z, 20, []);
+    for (let i = 0; i < 4 && list.length; i++) {
+      const c = list.splice((Math.random() * list.length) | 0, 1)[0];
+      if (hyp(c.x - cx, c.z - cz) > Math.max(6, RING.r - 6)) continue;
+      if (c.owner && c.owner !== b && c.owner.alive) continue;
+      const g = new V3(c.x, c.y, c.z); g.hold = true; g.holdFor = rand(8, 18); return g;
+    }
+  }
+  const a = rand(0, TAU), r = Math.random() * Math.max(5, RING.r * 0.55);
+  return stormSpot(cx + Math.cos(a) * r, cz + Math.sin(a) * r);
+}
+function stormSpot(x, z) {
+  x = clamp(x, MAP.x0 + 2, MAP.x1 - 2); z = clamp(z, MAP.z0 + 2, MAP.z1 - 2);
+  const id = navNode(x, gy0(x, z), z);
+  return id < 0 ? null : new V3(NAV.nx[id], NAV.ny[id], NAV.nz[id]);
+}
+/* Nombre de bots hostiles en vie (le joueur est seul, tout le monde est son adversaire). */
 function stormLive() { let n = 0; for (const e of entities) if (!e.isPlayer && e.alive && !e.off && !allied(e, PL.ent)) n++; return n; }
 function stormStrip() { hudText($('scLim'), _t('Tempête {0}/{1}', STORM.stage, STORM.stages)); }
-/* Chaque image de Tempête (modeUpdate) : victoire si plus aucun bot hostile, sinon l'horloge des étapes. Comme la Survie, le temps
-   n'avance qu'en jeu (derrière le menu de pause, il attend) ; en ligne, le mode n'existe pas (solo seulement). */
+/* Chaque image de Tempête (modeUpdate) : objets au sol, puis victoire si plus personne, sinon l'horloge des étapes. Comme la Survie,
+   le temps n'avance qu'en jeu (derrière le menu de pause, il attend) ; en ligne, le mode n'existe pas (solo seulement). */
 function stormUpdate(dt) {
   if (MATCH.state !== 'playing') return;
-  if (!stormLive()) { matchFinishSoon(); return; } // le dernier bot tombe : le joueur est vivant, la victoire se calcule seule (09l-fin.js)
+  stormItemsUpdate(dt);
+  if (!stormLive()) { matchFinishSoon(); return; } // le dernier debout est le joueur : la victoire se calcule seule (09l-fin.js)
   STORM.t -= dt;
   if (STORM.t > 0 || STORM.stage >= STORM.stages) return;
   STORM.stage++; STORM.t = STORM.tStage;
@@ -888,10 +977,10 @@ function stormUpdate(dt) {
   sfxAnnounce('ecap', 'st_lost'); // l'annonce d'une zone reprise : le même signal grave
   stormStrip(); // le bandeau n'est réécrit qu'à l'étape (jamais à chaque image)
 }
-/* Fin de partie ou retour aux menus : le butin semé disparaît, l'anneau de la carte reprend sa place (la ceinture du modeStart de la partie suivante). */
+/* Fin de partie ou retour aux menus : le butin et les objets semés disparaissent, l'anneau de la carte reprend sa place (la ceinture du modeStart suivant). */
 function stormClear() {
   for (const d of STORM.loot) if (DROP.list.indexOf(d) >= 0) removeDrop(d);
-  STORM.loot.length = 0; STORM.started = false; STORM.stage = 1; STORM.t = 0;
+  STORM.loot.length = 0; stormClearItems(); STORM.started = false; STORM.stage = 1; STORM.t = 0;
   if (STORM.dropMax) { DROP.max = STORM.dropMax; STORM.dropMax = 0; }
   ringReset();
 }

@@ -136,6 +136,7 @@ function botSearchNext(b, first) {
 function initTactics(b) {
   if (!b.pers) b.pers = botPers();
   b.aggr = clamp(b.weapon.ai.aggr + rand(-0.15, 0.15), 0.05, 0.95);
+  if (MATCH.mode === 'storm') b.aggr = clamp(b.aggr * 0.6, 0.05, 0.9); // Tempête : plus posé, on tient les positions plutôt que de charger
   const mates = entities.filter((o) => !o.isPlayer && o.team === b.team);
   b.lane = Math.random() < 0.35 ? pick(LANE_ROLES) : LANE_ROLES[Math.max(0, mates.indexOf(b)) % LANE_ROLES.length]; b.holdT = 0; // la route habituelle de son rang, ou, une vie sur trois, une autre
   b.revenge = b.grudge && MATCH.mode !== 'dom' && MATCH.time - b.grudge.t < 90 && Math.random() < 0.4 * (0.5 + b.aggr) ? b.grudge : null; b.grudge = null; // revenir où l'on a été tué, parfois

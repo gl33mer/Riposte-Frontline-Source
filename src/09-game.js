@@ -140,7 +140,7 @@ function killInfo(a, v, weapon) { return `<span class="${teamCls(a)}">${esc(a.na
 /* Séries d'un bot : trois au hasard, à trois seuils différents, tirées une fois pour toutes */
 function botKs(b) { if (!b.ks) b.ks = ksSort(ksPick(KS_IDS.slice().sort(() => Math.random() - 0.5))); return b.ks; }
 function botStreak(b) {
-  if (MATCH.mode === 'ffa' || MATCH.mode === 'survival' || ksJammed(b.team)) return; // chacun pour soi : les séries restent au joueur ; Survie : aucune, le joueur est seul ; brouillé par une IEM : la série est perdue
+  if (MATCH.mode === 'ffa' || MATCH.mode === 'survival' || MATCH.mode === 'storm' || ksJammed(b.team)) return; // chacun pour soi et Tempête : les séries restent au joueur ; Survie : aucune, le joueur est seul ; brouillé par une IEM : la série est perdue
   for (const id of botKs(b)) if (b.streak === KSDEF[id].n) KSDEF[id].bot(b);
 }
 function botUav(b) {
@@ -433,7 +433,7 @@ function showScoreboard(on) { HUD.board = on && MATCH.state !== 'ended'; $('boar
 const boardName = (x) => (x.isPlayer && MATCH.online ? NET.nick : x.name) + (MATCH.online && (x.netBot || x.remoteBot) ? ' ' + _t('(bot)') : '');
 /* Joueurs d'une équipe, du meilleur au moins bon (en ligne : seulement ceux qui participent) */
 const boardCmp = (a, b) => b.score - a.score || b.kills - a.kills || a.deaths - b.deaths;
-function boardList(t) { return entities.filter((x) => x.team === t && (!MATCH.online || x.isPlayer || x.isRemote || x.netBot)).sort(boardCmp); }
+function boardList(t) { return entities.filter((x) => !x.off && x.team === t && (!MATCH.online || x.isPlayer || x.isRemote || x.netBot)).sort(boardCmp); }
 /* Tableau des scores (Tab, Retour, bouton au doigt) : un panneau par équipe, en-tête (nom, score), colonnes en chiffres tabulaires ; ma ligne marquée
    (trait jaune et gras), les morts estompés. Récrit quatre fois par seconde au plus (updateHud), et seulement si son contenu a changé (hudHtml) */
 function fillScoreboard() {

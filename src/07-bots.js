@@ -10,9 +10,9 @@
    (un impact, un bruit, son chemin), un peu plus vers un adversaire en vue ; startle = surprise (s) d'un bot touché par un tireur qu'il ne
    voit pas, avant qu'il se retourne (botHurt) */
 /* Difficulté des bots de la partie : en ligne, celle que l'hôte a choisie dans le salon (NET.cfg.diff), sinon celle du Solo.
-   En Survie et en Tempête (solo), une ligne à part quelle que soit la difficulté choisie (DIFF_SURV, ci-dessous) : onze adversaires
-   ne se règlent pas comme un match à six contre six. */
-function botDiff() { if (MATCH.mode === 'survival' || MATCH.mode === 'storm') return DIFF_SURV; return DIFF[MATCH.online ? NET.cfg.diff : Settings.difficulty] || DIFF[1]; }
+   En Survie (solo), une ligne à part quelle que soit la difficulté choisie (DIFF_SURV, ci-dessous) : onze adversaires
+   ne se règlent pas comme un match à six contre six. La Tempête, elle, suit la difficulté choisie comme les autres modes. */
+function botDiff() { if (MATCH.mode === 'survival') return DIFF_SURV; return DIFF[MATCH.online ? NET.cfg.diff : Settings.difficulty] || DIFF[1]; } // la Tempête choisit sa difficulté comme les autres modes
 const DIFF = [
   { name: _t('Recrue'), react: [0.45, 0.8], err: 0.11, settle: 1.7, head: 0.03, turn: 3.2, dmg: 0.7, nade: 0.3, see: 0.6, lag: 0.34, flinch: 1.3, tokens: 1, mem: 2.5, flair: 0.3, chase: 8, spin: 3.4, startle: [0.45, 0.7] },
   { name: _t('Régulier'), react: [0.28, 0.5], err: 0.08, settle: 1.1, head: 0.07, turn: 4.8, dmg: 0.88, nade: 0.6, see: 0.85, lag: 0.2, flinch: 1.0, tokens: 2, mem: 4, flair: 0.7, chase: 13, spin: 4.6, startle: [0.32, 0.5] },
@@ -27,6 +27,8 @@ const BOT_NAMES = [
   ['Dubois', 'Keller', 'Marchetti', 'Okafor', 'Novak'],
   ['Volkov', 'Rahim', 'Karimov', 'Drago', 'Sokol', 'Petrenko'],
 ];
+/* Noms de la réserve (Tempête à plus de onze bots) : distincts de BOT_NAMES, pris dans l'ordre */
+const BOT_RESERVE_NAMES = ['Reyes', 'Bauer', 'Fontaine', 'Costa', 'Ivanov', 'Moreau', 'Wagner', 'Lombardi', 'Petrov', 'Girard', 'Nakamura', 'Silva', 'Hofer', 'Ricci', 'Dumas', 'Kovac', 'Mendes', 'Schulz', 'Leroy', 'Barbier', 'Yilmaz', 'Anders', 'Roux', 'Kaur'];
 const TEAM_NAMES = ['Alpha', 'Bravo'];
 const entities = [];
 const soundEvents = [];
@@ -75,7 +77,7 @@ function botArmForMap() {
    comportent comme l'absence du champ dans les tests existants ; markT et stealth restent à undefined car ils sont
    testés par === undefined (09m-marqueurs.js, 07b-tactics.js). */
 const BOT_STATE = {
-  senseAt: 0, dmgMul: 1, forceDecide: false, wantCrouch: false, tapCd: 0, yawV: 0, pitchV: 0, outT: 0, markT: undefined, markVis: false,
+  reserve: false, senseAt: 0, dmgMul: 1, forceDecide: false, wantCrouch: false, tapCd: 0, yawV: 0, pitchV: 0, outT: 0, markT: undefined, markVis: false,
   stealth: undefined, peeking: false, peekT: 0, peekSide: 0, leftCoverT: 0, flankPt: null, throwT: 0,
   bump: 0, bumpT: 0, unstickN: 0, unstickAt: -99, sideT: 0, sideDir: 0, backT: 0, recT: 0, recX: 0, recZ: 0, jumpT: 0, coverGoal: null, fwdOk: true, backOk: true,
   pers: null, slideAt: -99, jigT: 0, jigS: 1, rush: false, pace: 2, paceT: 0, glanceT: 0, glanceA: 0, dustT: 0,
@@ -88,7 +90,7 @@ function makeBot(team, idx) {
   if (WEAPONS[wid].ai.sniper && entities.some((e) => !e.isPlayer && e.team === team && e.weapon.ai.sniper)) wid = 'm4'; // un seul tireur d'élite par équipe
   const def = WEAPONS[wid];
   const b = { // team0 : l'équipe d'origine, pour la reconstituer à chaque partie (modeRoster ; la Survie met tous les bots chez Bravo)
-    ...BOT_STATE, id: entities.length, hfDt: 0, name: BOT_NAMES[team][idx], team, team0: team, isPlayer: false, pos: new V3(), vel: new V3(), vy: 0, yaw: 0, pitch: 0,
+    ...BOT_STATE, id: entities.length, hfDt: 0, name: (BOT_NAMES[team] && BOT_NAMES[team][idx]) || BOT_RESERVE_NAMES[(idx - BOT_NAMES[team].length) % BOT_RESERVE_NAMES.length], team, team0: team, isPlayer: false, pos: new V3(), vel: new V3(), vy: 0, yaw: 0, pitch: 0,
     alive: false, health: 100, crouch: false, crouchAmt: 0, kills: 0, deaths: 0, score: 0, assists: 0, streak: 0, lastShotT: -9,
     weapon: def, mag: def.mag, reloadT: 0, fireCd: 0, burst: 0, pauseT: 0,
     target: null, visible: false, lastKnown: new V3(), lastSeenT: -99, reactT: 0, seenT: 0, aimHead: false,
@@ -102,6 +104,14 @@ function makeBot(team, idx) {
   b.model = makeSoldier(b.skin, team === 0 ? 0 : 1, def.key); // au démarrage, le joueur est Alpha
   b.model.root.visible = false;
   entities.push(b);
+  return b;
+}
+/* Bot de réserve (Tempête à plus de onze bots) : les soldats d'origine restent la partie standard de tous les modes, la réserve ne joue
+   qu'en Tempête (modeRoster la met hors jeu ailleurs). Créée au premier besoin, gardée pour la session (kills au sol, tirs, etc. inchangés). */
+function makeBotReserve() {
+  let n = 0; for (const e of entities) if (e.reserve) n++;
+  const b = makeBot(1, BOT_NAMES[1].length + n);
+  b.reserve = true;
   return b;
 }
 
@@ -139,6 +149,7 @@ function botLookAt(b, p, now, dur) { b.lookAtX = p.x; b.lookAtZ = p.z; b.lookAtT
 const _gpick = new V3();
 function pickGoal(b, now) {
   const ffa = MATCH.mode === 'ffa', dom = MATCH.mode === 'dom', uav = !ffa && MATCH.uav[b.team] > 0; // chacun pour soi : l'UAV n'est qu'au joueur
+  if (MATCH.mode === 'storm') { const g = stormGoal(b, now); if (g) return g; } // Tempête : se replier vers le centre, ou tenir un couvert
   // domination : le plan d'équipe (07d-squad.js) donne à chacun son point, à prendre ou à défendre
   if (dom) { const g = squadGoal(b, now); if (g) return g; }
   else {

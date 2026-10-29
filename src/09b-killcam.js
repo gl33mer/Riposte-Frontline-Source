@@ -14,7 +14,7 @@
    envoyée pour tangente du déplacement (kcNetView). La relecture est dans le passé, l'état suivant est déjà là : rien n'est deviné, et ni le réseau
    ni la partie en direct n'y perdent rien. Entre deux états trop espacés, ou d'une vie à l'autre, la vue enregistrée reprend.
    ========================================================================== */
-const KC_EXTRA = 24, KC_HZ = 30, KC_LEN = 5.2, KC_N = Math.ceil(KC_HZ * KC_LEN) + 4, KC_STRIDE = 69; // 69 nombres par soldat : 64 la part du couteau sorti (PL.knifeHold, le joueur seul), 65 à 67 la position du soldat (kcNetView), 68 sa vue (KC_VUE)
+const KC_EXTRA = 48, KC_HZ = 30, KC_LEN = 5.2, KC_N = Math.ceil(KC_HZ * KC_LEN) + 4, KC_STRIDE = 69; // 69 nombres par soldat : 64 la part du couteau sorti (PL.knifeHold, le joueur seul), 65 à 67 la position du soldat (kcNetView), 68 sa vue (KC_VUE)
 /* Vue du soldat à l'instant enregistré : à pied (ses bras et son arme), à bord de son mecha (l'habitacle, sans le soldat : retour du propriétaire,
    les bras et l'arme se montraient par-dessus la cabine), ou sans rien devant les yeux (drone, vue d'une série) */
 const KC_VUE = { pied: 0, mecha: 1, rien: 2 };
