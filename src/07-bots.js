@@ -10,9 +10,9 @@
    (un impact, un bruit, son chemin), un peu plus vers un adversaire en vue ; startle = surprise (s) d'un bot touché par un tireur qu'il ne
    voit pas, avant qu'il se retourne (botHurt) */
 /* Difficulté des bots de la partie : en ligne, celle que l'hôte a choisie dans le salon (NET.cfg.diff), sinon celle du Solo.
-   En Survie (solo), une ligne à part quelle que soit la difficulté choisie (DIFF_SURV, ci-dessous) : onze adversaires
+   En Survie et en Tempête (solo), une ligne à part quelle que soit la difficulté choisie (DIFF_SURV, ci-dessous) : onze adversaires
    ne se règlent pas comme un match à six contre six. */
-function botDiff() { if (MATCH.mode === 'survival') return DIFF_SURV; return DIFF[MATCH.online ? NET.cfg.diff : Settings.difficulty] || DIFF[1]; }
+function botDiff() { if (MATCH.mode === 'survival' || MATCH.mode === 'storm') return DIFF_SURV; return DIFF[MATCH.online ? NET.cfg.diff : Settings.difficulty] || DIFF[1]; }
 const DIFF = [
   { name: _t('Recrue'), react: [0.45, 0.8], err: 0.11, settle: 1.7, head: 0.03, turn: 3.2, dmg: 0.7, nade: 0.3, see: 0.6, lag: 0.34, flinch: 1.3, tokens: 1, mem: 2.5, flair: 0.3, chase: 8, spin: 3.4, startle: [0.45, 0.7] },
   { name: _t('Régulier'), react: [0.28, 0.5], err: 0.08, settle: 1.1, head: 0.07, turn: 4.8, dmg: 0.88, nade: 0.6, see: 0.85, lag: 0.2, flinch: 1.0, tokens: 2, mem: 4, flair: 0.7, chase: 13, spin: 4.6, startle: [0.32, 0.5] },

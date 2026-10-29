@@ -37,7 +37,7 @@ function dropWeapon(def, mag, reserve, pos, q, vel) {
   const T = dropTemplate(def.key);
   const obj = T.group.clone(); obj.position.copy(pos); obj.quaternion.copy(q);
   scene.add(obj);
-  const d = { def, mag, reserve, obj, tpl: T, vel: vel.clone(), spin: new V3(rand(-6, 6), rand(-6, 6), rand(-6, 6)), landed: false, landT: 0, q0: new THREE.Quaternion(), qR: new THREE.Quaternion(), age: 0 };
+  const d = { def, mag, reserve, obj, tpl: T, vel: vel.clone(), spin: new V3(rand(-6, 6), rand(-6, 6), rand(-6, 6)), landed: false, landT: 0, q0: new THREE.Quaternion(), qR: new THREE.Quaternion(), age: 0, life: 0 }; // life : durée propre à un objet (0 : la durée commune DROP.life) ; le butin de la Tempête, lui, ne s'efface pas
   DROP.list.push(d);
   while (DROP.list.length > DROP.max) removeDrop(DROP.list[0]);
   return d;
@@ -90,7 +90,7 @@ function stepDrop(d, dt) {
     o.quaternion.slerpQuaternions(d.q0, d.qR, smoothstep(0, 1, d.landT));
   }
   // fin de vie : l'arme rétrécit et s'enfonce dans le sol
-  const left = DROP.life - d.age;
+  const left = (d.life || DROP.life) - d.age;
   if (left < DROP.fade) { const k = Math.max(0, left / DROP.fade); o.scale.setScalar(k); if (left <= 0) d.dead = true; }
 }
 
