@@ -208,7 +208,7 @@ function kcAbort() {
 }
 function kcSkip() {
   if (KC.active) { endKillcam(); return; }
-  if (MATCH.state === 'playing' && !PL.ent.alive && PL.deathT > 0.35 && !MATCH.finalPending && MATCH.mode !== 'survival') { KC.pending = null; respawnPlayer(); } // la Survie : pas de réapparition sur demande (Sans fin : au prochain passage ; Hardcore : la partie finit)
+  if (MATCH.state === 'playing' && !PL.ent.alive && PL.deathT > 0.35 && !MATCH.finalPending && MATCH.mode !== 'survival' && MATCH.mode !== 'storm') { KC.pending = null; respawnPlayer(); } // la Survie et la Tempête : pas de réapparition sur demande (Survie Sans fin : au prochain passage ; Hardcore et Tempête : la partie finit)
 }
 
 const _kf = new V3(), _kr = new V3(), _kd = new V3(), _kh = new V3();

@@ -20,6 +20,9 @@ let finTimer = 0;
 function matchOutcome() {
   const me = PL.ent, [a, b] = MATCH.score;
   if (MATCH.mode === 'survival') return { result: 'loss', winner: -1, sub: _t('Vous avez survécu {0} · {1} éliminations', fmtTime(-MATCH.timeLeft), me.kills) }; // le compte est celui de l'instant de la mort : figé dans MATCH.fin.out par matchFinish
+  if (MATCH.mode === 'storm') { // la Tempête : le joueur est vivant à la victoire (stormUpdate n'appelle la fin qu'alors), mort sinon (killEnt)
+    return { result: me.alive ? 'win' : 'loss', winner: -1, sub: me.alive ? _t('Vous avez survécu à la tempête · {0} éliminations', me.kills) : _t('Vous avez survécu {0} · {1} éliminations', fmtTime(-MATCH.timeLeft), me.kills) };
+  }
   if (MATCH.mode === 'ffa') { // le vainqueur est le premier du classement, personne d'autre ne gagne avec lui
     const top = ffaList().sort(ffaCmp)[0], win = top === me;
     return { result: win ? 'win' : 'loss', winner: -1, sub: win ? `${_t('Vous gagnez avec {0} éliminations', me.kills)}` : `${_t('{0} gagne avec {1} éliminations, vous finissez {2}', top.name, top.kills, ordinal(ffaRank()))}` };
@@ -34,6 +37,7 @@ function finByLimit() {
 }
 function finKicker() {
   if (MATCH.mode === 'survival') return _t('Éliminé'); // ce qui a mis fin à la partie : vous
+  if (MATCH.mode === 'storm') return PL.ent.alive ? _t('Tempête passée') : _t('Pris par la tempête'); // la Tempête : le dernier bot abattu, ou la mort dans le sable
   if (!finByLimit()) return _t('Temps écoulé');
   return MATCH.mode === 'dom' ? _t('Score atteint') : _t('Limite d\u0027éliminations atteinte');
 }

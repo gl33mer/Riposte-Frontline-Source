@@ -84,7 +84,7 @@ function killEnt(v, a, weapon, head, dir, life) {
   if (v.isPlayer) {
     if (PILOT.d) fpvLeave(); // la vue revient au corps ; le drone tombe (fpvStep)
     PL.deathT = 0; PL.killer = a !== v ? a : null; PL.reload = null; dropCookedNade(); PL.nadeState = null; PL.knifeT = 0; PL.knifeOut = false; PL.knifeHold = 0; PL.knifeBtn = null; vmClearHeld();
-      KC.pending = a && a !== v && a.model && MATCH.mode !== 'survival' && weapon !== NET_WSPECIAL.heli && weapon !== NET_WSPECIAL.drone && weapon !== NET_WSPECIAL.mecha && weapon !== NET_WSPECIAL.fall && weapon !== NET_WSPECIAL.zone ? a : null; KC.deathT = MATCH.time; // (le nom traduit : en anglais, 'Hélicoptère' ne correspondait jamais) ; la Survie : pas de relecture de sa mort — sans elle, la fin de relecture réapparaît sur-le-champ (endKillcam), au lieu d'attendre le passage
+      KC.pending = a && a !== v && a.model && MATCH.mode !== 'survival' && MATCH.mode !== 'storm' && weapon !== NET_WSPECIAL.heli && weapon !== NET_WSPECIAL.drone && weapon !== NET_WSPECIAL.mecha && weapon !== NET_WSPECIAL.fall && weapon !== NET_WSPECIAL.zone ? a : null; KC.deathT = MATCH.time; // (le nom traduit : en anglais, 'Hélicoptère' ne correspondait jamais) ; la Survie et la Tempête : pas de relecture de sa mort, la killcam finale décide (finDone) ; sans elle, la fin de relecture réapparaîtrait sur-le-champ
     if (KC.pending) KC.info = `<span class="enemy">${esc(a.name)}</span><i>${esc(weapon)}</i><i>${Math.round(a.pos.distanceTo(v.pos))} m</i>`;
     showDeathScreen(a, weapon, head);
   } else {
@@ -129,9 +129,9 @@ function killEnt(v, a, weapon, head, dir, life) {
   addKillfeed(a, v, weapon, head);
   const nocam = weapon === NET_WSPECIAL.fall || weapon === NET_WSPECIAL.zone; // une chute ne se rejoue pas (le corps est tombé dans le vide), une mort dans le désert non plus (personne n'a tiré)
   if (MATCH.online && enemyKill) MATCH.lastKill = { killer: a, victim: v, t: now, info: killInfo(a, v, weapon), nocam }; // en ligne, l'hôte décide la fin : la killcam finale reprend cette dernière élimination (matchFinish)
-  if (!MATCH.online && !MATCH.finalPending && !MATCH.fin && (MATCH.mode === 'survival' ? v.isPlayer : killLimitReached())) {
+  if (!MATCH.online && !MATCH.finalPending && !MATCH.fin && ((MATCH.mode === 'survival' || MATCH.mode === 'storm') ? v.isPlayer : killLimitReached())) {
     // la dernière élimination décide la partie : annonce du résultat (09l-fin.js), puis killcam finale sur cette élimination.
-    // En Survie, la mort du joueur décide : la killcam finale rejoue sa dernière élimination (sans tueur — chute, suicide : pas de rejouée)
+    // En Survie et en Tempête, la mort du joueur décide : la killcam finale rejoue sa dernière élimination (sans tueur — chute, suicide : pas de rejouée)
     MATCH.finalPending = { killer: a !== v ? a : null, victim: v, t: now, info: killInfo(a, v, weapon), nocam: nocam || a === v };
     matchFinishSoon(); // un court délai : la dernière victime a le temps de tomber avant l'annonce
   }
@@ -327,6 +327,7 @@ function updateHud(dt) {
   if (HUD.k !== k + TOUCH.on) { HUD.k = k + TOUCH.on; hud.style.setProperty('--hud-k', k); HUD.mmFit = true; } // (passer au doigt change aussi la taille de la mini-carte)
   if (mode !== HUD.mode) { updateStreakHud(); if (!e.alive) deathPrompt(); } // glyphes des séries prêtes et de la réapparition : clavier, manette ou doigt
   if (MATCH.mode === 'survival') { hudText(HUDE.scA, e.kills); hudText(HUDE.timer, fmtTime(SURV.t)); } // la Survie : mes éliminations, et le chrono de la manche (0:00 pendant l'extraction : fmtTime ramène tout à 0)
+  else if (MATCH.mode === 'storm') { hudText(HUDE.scA, e.kills); hudText(HUDE.scB, stormLive()); hudText(HUDE.timer, fmtTime(-MATCH.timeLeft)); } // la Tempête : mes éliminations, les bots restants, et le temps survécu (le chrono part de 0 et descend, matchTick)
   else { hudText(HUDE.scA, MATCH.score[0]); hudText(HUDE.scB, MATCH.score[1]); hudText(HUDE.timer, fmtTime(MATCH.timeLeft)); }
   hudStyle(HUDE.barA, 'transform', `scaleX(${MATCH.score[0] / MATCH.limit})`); hudStyle(HUDE.barB, 'transform', `scaleX(${MATCH.score[1] / MATCH.limit})`);
   // match à mort : le rang trie tous les soldats, quatre fois par seconde suffisent
@@ -462,7 +463,7 @@ function endRow(x, k, mvp) {
   return `<tr class="${x.isPlayer ? 'me' : ''}"><td>${k + 1}</td><td><span>${esc(boardName(x))}</span>${x === mvp ? ` <em class="mvp">MVP</em>` : ''}</td><td>${x.score}</td><td>${x.kills}</td><td>${x.deaths}</td><td>${ratio}</td><td>${x.assists}</td></tr>`;
 }
 function fillEnd() {
-  if (MATCH.mode === 'ffa' || MATCH.mode === 'survival') return fillEndFfa();
+  if (MATCH.mode === 'ffa' || MATCH.mode === 'survival' || MATCH.mode === 'storm') return fillEndFfa();
   const me = PL.ent, all = [0, 1].flatMap(boardList).sort(boardCmp), mvp = all[0], rank = all.indexOf(me) + 1;
   [me.team, 1 - me.team].forEach((t, i) => {
     const mine = t === me.team, win = MATCH.winner === t;
@@ -474,9 +475,9 @@ function fillEnd() {
 }
 /* Match à mort : un seul classement (colonne de gauche), la seconde n'existe pas */
 function fillEndFfa() {
-  const me = PL.ent, all = ffaList().sort(ffaCmp), mvp = all[0], surv = MATCH.mode === 'survival';
+  const me = PL.ent, all = ffaList().sort(ffaCmp), mvp = all[0], surv = MATCH.mode === 'survival' || MATCH.mode === 'storm';
   $('endC0').className = 'eb-cap ally';
-  // la Survie : pas de « vainqueur » (le bot le mieux classé ne veut rien dire) — le temps survécu est dans le sous-titre, mes éliminations ici
+  // la Survie et la Tempête : pas de « vainqueur » (le bot le mieux classé ne veut rien dire) — le temps survécu est dans le sous-titre, mes éliminations ici
   $('endC0').innerHTML = surv ? `<span><span>${_t('Éliminations')}</span></span><b>${me.kills}</b>` : `<span><span>${_t('Classement')}</span> <em class="win">${_t('Vainqueur : {0}', esc(boardName(mvp)))}</em></span><b>${mvp.kills}</b>`;
   $('endT0').innerHTML = `${endHead()}<tbody>${all.map((x, k) => endRow(x, k, mvp)).join('')}</tbody>`;
   return { rank: all.indexOf(me) + 1, total: all.length };
@@ -507,8 +508,8 @@ function startMatch(opt = {}) {
   if (!opt.online && netInLobby()) netQuit();
   MATCH.online = !!opt.online; if (MATCH.online) hostBgInit(); // hôte en arrière-plan : la partie continue (hostBgTick)
   const want = MATCH.online ? NET.cfg.mode : Settings.mode, mode = !MODES[want] || !CURMAP.def || (want === 'dom' && !CURMAP.def.dom) ? 'tdm' : want; // en ligne, le mode est celui du salon
-  MATCH.limit = mode === 'survival' ? Infinity : MATCH.online ? NET.cfg.limit : Settings[MODES[mode].key]; // la Survie : aucune limite, la mort du joueur seule décide (MATCH.mode suivra avec modeStart, un peu plus bas)
-  SMOKES.length = 0; PL.flashT = 0; MATCH.score = [0, 0]; MATCH.time = 0; MATCH.timeLeft = mode === 'survival' ? 0 : (MATCH.online ? NET.cfg.time : Settings.minutes) * 60; MATCH.uav = [0, 0]; MATCH.uavPing = [null, null]; MATCH.sat = [0, 0]; MATCH.iem = [0, 0]; MATCH.events = []; MATCH.winner = -1; // la Survie compte le chrono dans le négatif : -timeLeft = temps survécu (matchTick ne l'arrête plus à zéro)
+  MATCH.limit = (mode === 'survival' || mode === 'storm') ? Infinity : MATCH.online ? NET.cfg.limit : Settings[MODES[mode].key]; // la Survie et la Tempête : aucune limite, la mort du joueur seule décide (MATCH.mode suivra avec modeStart, un peu plus bas)
+  SMOKES.length = 0; PL.flashT = 0; MATCH.score = [0, 0]; MATCH.time = 0; MATCH.timeLeft = (mode === 'survival' || mode === 'storm') ? 0 : (MATCH.online ? NET.cfg.time : Settings.minutes) * 60; MATCH.uav = [0, 0]; MATCH.uavPing = [null, null]; MATCH.sat = [0, 0]; MATCH.iem = [0, 0]; MATCH.events = []; MATCH.winner = -1; // la Survie et la Tempête comptent le chrono dans le négatif : -timeLeft = temps survécu (matchTick ne l'arrête plus à zéro)
   for (const n of NADES) scene.remove(n.mesh); NADES.length = 0; clearThrowKnives(); soundEvents.length = 0; clearAircraft(); clearDrops();
   FX.holes.clear(); FX.splats.clear(); FX.scorch.clear(); propsReset();
   for (const e of entities) { e.kills = e.deaths = e.score = e.assists = e.streak = e.comboN = 0; e.comboT = -99; e.alive = false; e.lastShotT = -9; }
@@ -537,7 +538,7 @@ function startMatch(opt = {}) {
   // le passage en plein écran (demandé au clic de déploiement) fait refuser une capture demandée pendant la transition : on l'attend
   if (LOCK.fsPending) { const fs = LOCK.fsPending; LOCK.fsPending = null; LOCK.quiet = true; fs.then(() => setTimeout(() => { if (MATCH.state === 'playing') requestLock(); }, 80)); }
   else requestLock();
-  hudText($('scLim'), MATCH.mode === 'survival' ? _t('Manche {0} · {1} ennemis', SURV.round, survBotCap(SURV.round)) : MATCH.mode === 'dom' ? _t('Premier à {0} points', MATCH.limit) : _t('Premier à {0}', MATCH.limit)); // la Survie : le bandeau dit la manche en cours et son lot de bots (il reste affiché, shell.html)
+  hudText($('scLim'), MATCH.mode === 'survival' ? _t('Manche {0} · {1} ennemis', SURV.round, survBotCap(SURV.round)) : MATCH.mode === 'storm' ? _t('Tempête {0}/{1}', STORM.stage, STORM.stages) : MATCH.mode === 'dom' ? _t('Premier à {0} points', MATCH.limit) : _t('Premier à {0}', MATCH.limit)); // la Survie : le bandeau dit la manche ; la Tempête : l'étape (il reste affiché, shell.html)
   PL.hsKills = 0; arsSessionReset(); acctMatchStart(); // jeton de partie du compte (09j-compte.js)
   skinTrim(); // tenues de défi que personne ne porte : libérées (09u-tenues.js)
   pfrStart(); // enregistreur de performances, avec « Afficher les performances » (09zo-perfs.js)
@@ -549,7 +550,7 @@ function endMatch() {
   if (KC.active) { KC.active = false; $('killcam').classList.remove('show'); KC.body.root.visible = false; }
   MATCH.state = 'ended'; arsShowClear(); cdClear();
   const me = PL.ent, o = MATCH.fin ? MATCH.fin.out : matchOutcome(); // figé par l'annonce : les deux disent la même chose
-  $('end').classList.toggle('one', MATCH.mode === 'ffa' || MATCH.mode === 'survival');
+  $('end').classList.toggle('one', MATCH.mode === 'ffa' || MATCH.mode === 'survival' || MATCH.mode === 'storm');
   MATCH.winner = o.winner;
   $('endKick').textContent = finKicker(); // ce qui a fini la partie : limite atteinte ou temps écoulé
   $('endTitle').textContent = FIN_TEXT[o.result];
@@ -754,7 +755,7 @@ function matchTick(dt, bg) {
   updateNades(dt); updateThrowKnives(dt); updateSmokes(dt); updateDrops(dt); updateProps(dt); pfrLap(2);
   updateKillstreak(dt); updateAircraft(dt);
   if (!bg) { drawTacMap(); if (ESSAI || ESSAI_MECHA) essaiTick(dt); updateHud(dt); }
-  if (!fin && MATCH.mode !== 'survival' && MATCH.timeLeft <= 0) matchFinish(); // la Survie ne finit pas au chrono, mais à la mort du joueur (killEnt)
+  if (!fin && MATCH.mode !== 'survival' && MATCH.mode !== 'storm' && MATCH.timeLeft <= 0) matchFinish(); // la Survie ne finit pas au chrono, mais à la mort du joueur (killEnt) ; la Tempête non plus (sa victoire est dans stormUpdate)
   if (!bg && !(KC.active && KC.live)) kcRecord(); // relecture en ligne : tampon figé
   netUpdate(dt);
   return dt;
